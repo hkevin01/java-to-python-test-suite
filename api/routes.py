@@ -12,6 +12,7 @@ from uuid import uuid4
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
+from core.audit_dashboard import build_release_dashboard_from_path
 from core.auth import permission_dependency
 from core.quality_metrics import build_quality_snapshot
 from guardrails.input_guard import InputGuardError, sanitize
@@ -38,6 +39,15 @@ def _write_audit(record: dict[str, Any]) -> None:
     os.makedirs(os.path.dirname(_audit_path()), exist_ok=True)
     with open(_audit_path(), "a", encoding="utf-8") as f:
         f.write(json.dumps(safe_record, ensure_ascii=True) + "\n")
+
+
+@router.get("/audit-report")
+async def audit_report(
+    user: dict = Depends(permission_dependency("translate")),
+):
+    dashboard = build_release_dashboard_from_path(_audit_path())
+    dashboard["viewer"] = user.get("sub")
+    return dashboard
 
 
 class TranslateRequest(BaseModel):

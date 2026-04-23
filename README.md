@@ -742,6 +742,75 @@ This repository now exposes LoadRunner-friendly transaction metadata in audit re
 
 That makes it straightforward to compare internal audit data with external LoadRunner runs and to use the same transaction names in performance dashboards.
 
+### 7.1 Release Dashboard Endpoint
+
+The service now includes a small read-only release dashboard endpoint at `/api/v1/audit-report`.
+
+It aggregates the JSONL audit log into a single release-oriented summary:
+
+| Dashboard Section | Aggregates | Why It Matters For Release Decisions |
+|---|---|---|
+| `summary` | Total requests, ok requests, blocked requests, unique actions | Quick go/no-go snapshot |
+| `actions` | Per-endpoint request count, average latency, p95 latency, LoadRunner pass rate | Shows which endpoint is drifting |
+| `performance` | Global average latency, p95 latency, performance status counts | Highlights SLA breaches and warning trends |
+| `quality` | CTQ pass rates, average DPMO, sigma-band counts, control-state counts | Converts raw audit events into process-quality signals |
+
+Example usage:
+
+```bash
+curl -H "Authorization: Bearer <token>" http://localhost:8000/api/v1/audit-report
+```
+
+Example response shape:
+
+```json
+{
+  "summary": {
+    "total_requests": 24,
+    "ok_requests": 21,
+    "blocked_requests": 3,
+    "unique_actions": 3
+  },
+  "actions": {
+    "translate": {
+      "requests": 12,
+      "avg_latency_ms": 85.4,
+      "p95_latency_ms": 140.2,
+      "loadrunner_pass_rate": 1.0
+    }
+  },
+  "performance": {
+    "avg_latency_ms": 91.7,
+    "p95_latency_ms": 151.6,
+    "performance_status_counts": {
+      "within_control": 22,
+      "warning": 1,
+      "breach": 1
+    },
+    "loadrunner_pass_rate": 0.958
+  },
+  "quality": {
+    "ctq_metrics": {
+      "reliability": {
+        "pass_count": 23,
+        "total": 24,
+        "pass_rate": 0.958
+      }
+    },
+    "avg_dpmo": 13888.889,
+    "sigma_band_counts": {
+      "good": 20,
+      "watch": 4
+    },
+    "control_state_counts": {
+      "in_control": 21,
+      "watch": 2,
+      "out_of_control": 1
+    }
+  }
+}
+```
+
 ### 8. CI/CD Pipeline with All Tools (Complete Setup)
 
 Recommended GitHub Actions workflow:
