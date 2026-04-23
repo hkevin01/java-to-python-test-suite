@@ -2,148 +2,277 @@
 
 <div align="center">
   <h1>Java to Python Test Suite</h1>
-  <p><em>A security-focused, multi-layer test suite for validating Java-to-Python translation services.</em></p>
+  <p><em>Verification-first test infrastructure for secure, dependency-aware Java to Python translation services.</em></p>
 </div>
 
+![License](https://img.shields.io/github/license/hkevin01/java-to-python-test-suite?style=flat-square)
+![Last Commit](https://img.shields.io/github/last-commit/hkevin01/java-to-python-test-suite?style=flat-square)
+![Issues](https://img.shields.io/github/issues/hkevin01/java-to-python-test-suite?style=flat-square)
 ![Python](https://img.shields.io/badge/python-3.11%2B-blue?style=flat-square&logo=python)
 ![Pytest](https://img.shields.io/badge/pytest-8.x-0A9EDC?style=flat-square&logo=pytest)
-![License](https://img.shields.io/badge/license-MIT-green?style=flat-square)
-![Status](https://img.shields.io/badge/status-active-success?style=flat-square)
+![Security Tests](https://img.shields.io/badge/security-tests%20included-success?style=flat-square)
+
+## Executive Summary
+
+This project uses a Python + pytest stack because it maximizes test expressiveness, async API coverage, and security-focused validation in one cohesive framework. The suite is intentionally built around comparison and traceability: each major requirement is represented in marker groups, assertion patterns, dependency ordering tests, and visual models.
+
+### Why This Stack, How It Is Used, and Benefits
+
+| Technology | Why Used | How Used in This Suite | Benefit Over Alternatives |
+|---|---|---|---|
+| Python 3.11+ | Fast iteration and excellent testing ecosystem | Executes all test layers and fixture logic | Lower friction than Java/JUnit for mixed async + security test authoring |
+| pytest | Marker-based structure and fixture system | Separates unit/integration/correctness/negative/adversarial pipelines | Better parametrization and fixture ergonomics than unittest |
+| pytest-asyncio | Native async compatibility | Runs async endpoint tests without custom event-loop wrappers | Cleaner than ad-hoc loop management |
+| httpx + ASGITransport | In-process API contract testing | Calls API endpoints with dependency overrides and mock backends | Faster and more deterministic than external server + requests |
+| cryptography + PyJWT | Realistic auth-path verification | Generates RSA keys and signs test JWTs at runtime | Stronger coverage than static token-only tests |
+| javalang | Java structure awareness in validation workflows | Supports parser-oriented assertions in unit tests | More reliable than regex-only Java parsing checks |
+
+> [!IMPORTANT]
+> The suite verifies not only correctness, but also translation safety and dependency order requirements, including base-class-before-subclass guarantees through topological sorting tests.
 
 ## Table of Contents
 
+- [Executive Summary](#executive-summary)
 - [Overview](#overview)
-- [Key Features](#key-features)
+- [Requirements to Validation Mapping](#requirements-to-validation-mapping)
 - [Architecture](#architecture)
-- [Usage Flow](#usage-flow)
-- [Category Breakdown](#category-breakdown)
-- [Technology Stack](#technology-stack)
+- [Object Model](#object-model)
+- [Dependency Graph and Topological Sort](#dependency-graph-and-topological-sort)
+- [Why Kahn's Algorithm Matters Here](#why-kahns-algorithm-matters-here)
+- [Visualization as a Verification Tool](#visualization-as-a-verification-tool)
+- [Technology Stack Decision Matrix](#technology-stack-decision-matrix)
+- [Test Suite Breakdown](#test-suite-breakdown)
 - [Setup and Installation](#setup-and-installation)
-- [Running the Suite](#running-the-suite)
+- [Usage](#usage)
 - [Roadmap](#roadmap)
-- [Development Status](#development-status)
 - [Contributing](#contributing)
 - [License](#license)
 
 ## Overview
 
-This repository provides a dedicated test harness for a Java-to-Python translation service. The suite validates parser behavior, output structure, API contracts, authorization boundaries, and adversarial resilience. It is designed for teams operating LLM-backed developer tools that require strong guardrails and reproducible quality checks.
+This repository is a dedicated test harness for a Java-to-Python translation service. It validates parser behavior, method/type fidelity, API contract integrity, authorization controls, guardrail enforcement, and adversarial resilience. It is designed for teams that need reproducible quality and security checks before releasing translation features.
 
 > [!IMPORTANT]
-> The suite assumes an external orchestrator service path and environment variables are available as configured in `conftest.py`.
+> The suite assumes an external orchestrator source path and environment variables are available as configured in `conftest.py`.
+
+Core value for this project:
+
+- Confirms required behavior with explicit assertions (not heuristic checks only).
+- Compares expected ordering and output properties against actual responses.
+- Detects failures in dependency ordering and cycle handling early.
+- Verifies that translation order favors reusable base components before dependents.
 
 <p align="right">(<a href="#top">back to top</a>)</p>
 
-## Key Features
+## Requirements to Validation Mapping
 
-| Feature | Description | Impact | Status |
+| Requirement | Implementation Focus | Evidence in Test Suite | Outcome Verified |
 |---|---|---|---|
-| Multi-layer test taxonomy | Unit, integration, correctness, negative, and adversarial coverage | High | Stable |
-| Built-in auth fixtures | RSA keypair + JWT generation for role and expiry tests | High | Stable |
-| Guardrail validation | Input/output safety tests for injection and policy leakage | High | Stable |
-| API-level checks | Endpoint contract verification using async HTTP clients | Medium | Stable |
-| Deterministic fixture corpus | Reusable Java snippets and expected Python outputs | Medium | Stable |
-
-- Marker-based organization enables targeted quality gates in CI.
-- Adversarial test modules verify prompt-injection resistance before LLM call paths.
-- Negative tests enforce RBAC and model/egress constraints.
-- Correctness tests validate output validity, imports, signatures, and structure.
-
-<details>
-<summary>Expanded coverage map</summary>
-
-- `tests/unit`: parser and transformation primitives
-- `tests/integration`: endpoint behavior and audit trail
-- `tests/correctness`: translated artifact quality checks
-- `tests/negative`: security and policy denial paths
-- `tests/adversarial`: malformed input, boundary, and injection scenarios
-
-</details>
+| Parse Java artifacts safely | Parser and class-info extraction paths | `tests/unit/test_java_parsing.py` | AST/data extraction is stable for normal and malformed inputs |
+| Build dependency graph correctly | Intra-project edge construction | `tests/unit/test_dependency_graph.py` | No self-loops, no JDK noise, valid class map |
+| Sort translation order by dependency | Topological ordering logic | `tests/unit/test_topological_sort.py` | Dependencies appear before dependent classes |
+| Translate base classes before subclasses | Ordering invariant in project translation plan | `tests/unit/test_topological_sort.py` and `tests/integration/test_project_translate_api.py` | Base abstractions precede concrete subclasses/services |
+| Detect cycles without dropping files | Cycle fallback behavior | `tests/adversarial/test_circular_dependencies.py` and unit cycle tests | `had_cycle` is true and all files remain represented |
+| Block unsafe or manipulative input | Input guardrails | `tests/adversarial/test_prompt_injection.py` and `tests/unit/test_guardrails.py` | Injection/secret patterns rejected before model path |
+| Enforce RBAC and policy boundaries | JWT + permission checks | `tests/negative/test_rbac_enforcement.py` | Unauthorized roles/actions are denied |
 
 <p align="right">(<a href="#top">back to top</a>)</p>
 
 ## Architecture
 
 ```mermaid
-flowchart TD
-  A[Test Cases] --> B[Pytest Runner]
-  B --> C[Fixtures and Conftest]
-  C --> D[HTTP Client and Auth Overrides]
-  D --> E[Orchestrator API]
-  E --> F[Guardrails and Translation Pipeline]
-  F --> G[Assertions and Reports]
+flowchart LR
+  A[Fixture Corpus: Java Inputs] --> B[Pytest Marker Groups]
+  B --> C[Unit Validations]
+  B --> D[Integration Endpoint Contracts]
+  B --> E[Negative Security and RBAC]
+  B --> F[Adversarial Guardrail Tests]
+  C --> G[Dependency Graph + Topological Sort Validation]
+  D --> H[Translate and Translate-Project API Behavior]
+  E --> H
+  F --> H
+  G --> I[Confidence in Ordering and Requirements]
+  H --> I
 ```
 
-The suite is layered around pytest entry points and shared fixtures. Fixture constants model Java source inputs and expected outputs while auth helpers generate signed JWTs for permission checks.
+Architecture intent:
 
-Integration tests use ASGI transport clients and dependency overrides to validate endpoint behavior without relying on external network calls for authentication.
+- Marker groups isolate concerns so each risk area is testable independently.
+- Unit tests validate deterministic algorithmic behavior (graph and order).
+- Integration tests confirm API contract fields like `dependency_order` and `had_cycle`.
+- Security suites ensure unsafe requests fail fast and auditable paths stay intact.
 
 <p align="right">(<a href="#top">back to top</a>)</p>
 
-## Usage Flow
+## Object Model
+
+```mermaid
+classDiagram
+  class FileEntry {
+    +string filename
+    +string source
+    +class_info
+    +set dependencies
+    +int order
+  }
+
+  class ProjectTranslationPlan {
+    +list ordered_files
+    +map class_map
+    +bool had_cycle
+  }
+
+  class JavaClassInfo {
+    +string name
+    +bool is_interface
+    +bool is_abstract
+    +set imports
+    +set methods
+  }
+
+  ProjectTranslationPlan "1" --> "many" FileEntry : contains
+  FileEntry --> JavaClassInfo : parsed_from
+```
+
+How this model helps:
+
+- Makes ordering state explicit (`order`, `dependencies`, `had_cycle`).
+- Supports comparison between parsed structure and output expectations.
+- Enables requirement-level assertions that are easy to reason about in tests.
+
+<p align="right">(<a href="#top">back to top</a>)</p>
+
+## Dependency Graph and Topological Sort
+
+The translation planner builds a directed dependency graph where each node is a class/file and edges represent prerequisite relationships (for example, subclass depends on base class).
+
+```mermaid
+flowchart TD
+  A[AbstractProcessor] --> B[PaymentProcessor]
+  C[Order] --> D[OrderService]
+  E[IRepository] --> F[OrderRepository]
+  C --> F
+```
+
+The expected translation order is dependency-first:
+
+1. Base abstractions and interfaces.
+2. Core domain models.
+3. Concrete implementations and services.
+
+This is why tests verify examples such as Order before OrderService and AbstractProcessor before PaymentProcessor.
+
+<details>
+<summary>Dependency ordering checkpoints used by the suite</summary>
+
+| Ordering Check | Why It Matters | Test Evidence |
+|---|---|---|
+| `Order` before `OrderService` | Service methods require model definitions first | Unit and integration ordering assertions |
+| `AbstractProcessor` before `PaymentProcessor` | Subclass translation needs base contract context | Unit topological ordering assertions |
+| `IRepository` before `OrderRepository` | Interface constraints should be available before implementation | Unit topological ordering assertions |
+| Cycle path still returns all files | Production robustness under imperfect source graphs | Circular dependency adversarial/unit tests |
+
+</details>
+
+<p align="right">(<a href="#top">back to top</a>)</p>
+
+## Why Kahn's Algorithm Matters Here
+
+Kahn's algorithm is a topological sorting method for directed acyclic graphs.
+
+High-level behavior:
+
+1. Compute in-degree for each node.
+2. Start with nodes that have in-degree 0 (no unmet dependencies).
+3. Remove processed nodes and decrement neighbors.
+4. Continue until all nodes are processed.
+5. If nodes remain with non-zero in-degree, a cycle exists.
+
+In this test suite, that behavior directly supports translation correctness:
+
+- Guarantees dependency-first ordering for base classes and shared contracts.
+- Prevents subclass-first generation that can create invalid imports/signatures.
+- Detects cycles early while still preserving a complete output list for diagnostics.
 
 ```mermaid
 sequenceDiagram
-  participant Dev as Developer
-  participant Py as Pytest
-  participant App as API App
-  participant Guards as Guardrails
-  Dev->>Py: pytest -m integration
-  Py->>App: POST /api/v1/translate
-  App->>Guards: sanitize(input)
-  Guards-->>App: accepted or blocked
-  App-->>Py: response payload
-  Py-->>Dev: pass/fail report
-```
-
-Typical workflow:
-
-1. Install dependencies.
-2. Execute a focused marker group.
-3. Review failures and iterate on service behavior.
-
-```bash
-pytest -m unit -q
-pytest -m correctness -q
-pytest -m adversarial -q
+  participant Graph as Dependency Graph
+  participant Kahn as Kahn Sort
+  participant Planner as Translation Planner
+  Graph->>Kahn: Nodes + edges
+  Kahn->>Kahn: Process zero in-degree queue
+  Kahn-->>Planner: dependency_order
+  Kahn-->>Planner: had_cycle flag
+  Planner-->>Planner: translate base classes before subclasses
 ```
 
 > [!TIP]
-> Use `-k` to narrow down failures quickly, for example `pytest -m integration -k translate -q`.
+> Kahn's approach is deterministic and testable: each assertion can verify that every dependency index is lower than its dependent index.
 
 <p align="right">(<a href="#top">back to top</a>)</p>
 
-## Category Breakdown
+## Visualization as a Verification Tool
+
+Visualizations in this README are not decorative. They reduce ambiguity when comparing implemented function behavior against requirements.
+
+| Visualization | Confirms | Comparison Benefit |
+|---|---|---|
+| Architecture flowchart | End-to-end validation pipeline | Quickly spots missing validation layers |
+| Object model diagram | Data structures and relationships | Confirms required fields exist for assertions |
+| Dependency graph diagram | Expected dependency direction | Makes ordering mistakes obvious during review |
+| Kahn sequence diagram | Algorithm steps and outputs | Aligns function behavior with requirement statements |
+
+How this helps requirement comparison:
+
+- Requirement text says dependency-first translation.
+- Graph + sequence diagrams show exactly how dependency-first behavior is enforced.
+- Unit tests then compare actual order indices to required invariants.
+- Integration tests compare API `dependency_order` to expected file precedence.
+
+<p align="right">(<a href="#top">back to top</a>)</p>
+
+## Technology Stack Decision Matrix
+
+| Stack Part | Chosen Option | Alternative | Why Chosen for This Project | Practical Benefit |
+|---|---|---|---|---|
+| Test framework | pytest | unittest | Marker groups and fixture composition scale better for layered suites | Faster targeted runs and cleaner test organization |
+| Async testing | pytest-asyncio | custom loop management | Native async test support without boilerplate | Lower maintenance and fewer flaky async tests |
+| API client | httpx + ASGITransport | requests + live server | In-process execution keeps integration tests deterministic | Better speed and less CI networking variability |
+| Auth validation | cryptography + PyJWT | static token strings | Runtime key/signature generation tests real verification paths | Higher confidence in RBAC behavior |
+| Java structure parsing | javalang | regex parsing | Structural parsing avoids brittle text matching | More robust dependency and class extraction checks |
+
+<details>
+<summary>Technology usage map by test concern</summary>
+
+| Test Concern | Main Technology | Role |
+|---|---|---|
+| Parser and graph correctness | pytest + javalang | Validates class extraction and dependency edges |
+| Endpoint behavior | pytest-asyncio + httpx | Exercises translate endpoints and payload contracts |
+| RBAC and token handling | cryptography + PyJWT | Generates realistic signed JWTs for role checks |
+| Guardrails and adversarial handling | pytest markers + fixtures | Enforces injection/secret blocking expectations |
+
+</details>
+
+<p align="right">(<a href="#top">back to top</a>)</p>
+
+## Test Suite Breakdown
 
 ```mermaid
-pie title Test Category Distribution
-  "Unit" : 5
-  "Integration" : 4
-  "Correctness" : 4
-  "Negative" : 4
-  "Adversarial" : 4
+pie title Test File Distribution by Marker Group
+  "unit" : 5
+  "integration" : 4
+  "correctness" : 4
+  "negative" : 4
+  "adversarial" : 4
 ```
 
-| Category | Test Files | Approx. Share |
-|---|---:|---:|
-| Unit | 5 | 23.8% |
-| Integration | 4 | 19.0% |
-| Correctness | 4 | 19.0% |
-| Negative | 4 | 19.0% |
-| Adversarial | 4 | 19.0% |
-
-<p align="right">(<a href="#top">back to top</a>)</p>
-
-## Technology Stack
-
-| Technology | Purpose | Why Chosen | Alternatives |
-|---|---|---|---|
-| Python | Test runtime | Strong tooling and async support | Node.js test stacks |
-| Pytest | Test framework | Marker system + fixtures + ecosystem | unittest, nose2 |
-| pytest-asyncio | Async test execution | Native async test support | anyio-only approaches |
-| httpx | ASGI-level API tests | Fast in-process API validation | requests + live server |
-| cryptography + PyJWT | JWT and keypair testing | Realistic auth-path coverage | static token fixtures |
-| javalang | Java parsing support | Domain-relevant parser dependency | custom parser logic |
+| Marker Group | Purpose | Key Benefit |
+|---|---|---|
+| unit | Algorithmic correctness for parsing/graph/order | Fast feedback on core logic |
+| integration | API request/response and contract validation | Catches wiring and schema regressions |
+| correctness | Python output structure and signature quality | Protects translation fidelity |
+| negative | Policy and access-control enforcement | Prevents unsafe execution paths |
+| adversarial | Injection and malformed input hardening | Reduces attack-surface risk |
 
 <p align="right">(<a href="#top">back to top</a>)</p>
 
@@ -152,7 +281,7 @@ pie title Test Category Distribution
 Prerequisites:
 
 - Python 3.11+
-- Access to the associated orchestrator source path expected by `conftest.py`
+- Access to the orchestrator source path expected by `conftest.py`
 
 Install:
 
@@ -162,13 +291,13 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-Optional environment file:
+Optional local env file:
 
 ```bash
 cp .env.example .env
 ```
 
-Verification:
+Quick validation:
 
 ```bash
 pytest --collect-only -q
@@ -176,13 +305,17 @@ pytest --collect-only -q
 
 <p align="right">(<a href="#top">back to top</a>)</p>
 
-## Running the Suite
+## Usage
+
+Run full suite:
 
 ```bash
-# all tests
 pytest -q
+```
 
-# by marker
+Run by concern:
+
+```bash
 pytest -m unit -q
 pytest -m integration -q
 pytest -m correctness -q
@@ -190,19 +323,19 @@ pytest -m negative -q
 pytest -m adversarial -q
 ```
 
-Keyboard shortcuts while local runs are active:
+Focused debugging flow:
 
-- Press <kbd>Ctrl</kbd>+<kbd>C</kbd> once to stop and show current summary.
-- Press <kbd>Ctrl</kbd>+<kbd>C</kbd> again to force quit if needed.
+1. Install dependencies.
+2. Run the relevant marker group.
+3. Use `-k` to isolate failing behavior.
+4. Re-run the same slice to confirm regression closure.
 
-<details>
-<summary>Common troubleshooting</summary>
+```bash
+pytest -m integration -k dependency_order -q
+```
 
-- Ensure the orchestrator source path referenced by `conftest.py` exists.
-- Confirm required environment variables are present before import-time settings load.
-- If auth failures occur, check JWT key initialization in root test fixtures.
-
-</details>
+> [!TIP]
+> For long local runs, use <kbd>Ctrl</kbd>+<kbd>C</kbd> to stop gracefully and keep the latest failure summary.
 
 <p align="right">(<a href="#top">back to top</a>)</p>
 
@@ -210,33 +343,21 @@ Keyboard shortcuts while local runs are active:
 
 ```mermaid
 gantt
-  title Test Suite Roadmap
+  title Verification Roadmap
   dateFormat  YYYY-MM-DD
-  section Foundation
-  Baseline unit and integration coverage   :done, a1, 2026-01-01, 2026-02-15
+  section Core
+  Parser and ordering guarantees            :done, r1, 2026-01-01, 2026-02-20
   section Security
-  Adversarial and negative hardening       :active, a2, 2026-02-16, 2026-05-15
-  section Scale
-  Performance and mutation testing         :a3, 2026-05-16, 2026-08-15
+  RBAC and guardrail hardening              :active, r2, 2026-02-21, 2026-05-30
+  section Expansion
+  Coverage growth and mutation checks       :r3, 2026-06-01, 2026-09-01
 ```
 
 | Phase | Goals | Target | Status |
 |---|---|---|---|
-| Foundation | Baseline endpoint + parser correctness checks | Q1 2026 | Complete |
+| Core | Preserve dependency and translation order correctness | Q1 2026 | Complete |
 | Security | Broaden adversarial and RBAC scenarios | Q2 2026 | In progress |
-| Scale | Add performance and mutation-based confidence gates | Q3 2026 | Planned |
-
-<p align="right">(<a href="#top">back to top</a>)</p>
-
-## Development Status
-
-| Version | Stability | Coverage Focus | Known Limitations |
-|---|---|---|---|
-| 0.1.x | Stable for internal use | Security and API contract tests | Depends on external orchestrator path |
-| 0.2.x (planned) | In progress | Broader fixture corpus and edge cases | Benchmark automation not yet added |
-
-> [!WARNING]
-> If orchestrator module paths change, import-time setup in `conftest.py` must be updated before test execution.
+| Expansion | Add mutation testing and richer fixture corpora | Q3 2026 | Planned |
 
 <p align="right">(<a href="#top">back to top</a>)</p>
 
@@ -245,12 +366,12 @@ gantt
 See `CONTRIBUTING.md` for workflow and test expectations.
 
 <details>
-<summary>Quick PR checklist</summary>
+<summary>Quality checklist for pull requests</summary>
 
-- Add or update tests for every behavior change.
-- Keep fixtures deterministic.
-- Run `pytest -q` before opening a PR.
-- Use focused commits with clear summaries.
+- Add or update tests for each behavior change.
+- Preserve dependency-order invariants in project translation paths.
+- Keep fixtures deterministic and security-safe.
+- Run targeted marker groups plus a full suite pass before opening a PR.
 
 </details>
 
