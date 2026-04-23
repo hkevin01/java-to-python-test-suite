@@ -68,6 +68,9 @@ def build_release_dashboard(records: list[dict[str, Any]]) -> dict[str, Any]:
     action_latencies: dict[str, list[float]] = defaultdict(list)
     action_loadrunner_pass: Counter[str] = Counter()
     action_loadrunner_total: Counter[str] = Counter()
+    identity_verified_count = 0
+    policy_decision_count = 0
+    continuous_verification_count = 0
 
     for record in records:
         action = str(record.get("action") or "unknown")
@@ -75,10 +78,15 @@ def build_release_dashboard(records: list[dict[str, Any]]) -> dict[str, Any]:
 
         status = str(record.get("status") or "unknown")
         status_counts[status] += 1
+        if status in {"ok", "blocked"} or isinstance(record.get("blocked"), bool):
+            policy_decision_count += 1
         if status == "ok":
             total_ok += 1
         if record.get("blocked") is True or status == "blocked":
             total_blocked += 1
+
+        if record.get("user_id") is not None or record.get("sub") is not None:
+            identity_verified_count += 1
 
         latency = record.get("latency_ms")
         if isinstance(latency, (int, float)):
@@ -109,6 +117,10 @@ def build_release_dashboard(records: list[dict[str, Any]]) -> dict[str, Any]:
             if isinstance(dpmo, (int, float)):
                 all_dpmo.append(float(dpmo))
 
+        # Continuous verification evidence: request carried runtime quality signals
+        if isinstance(record.get("ctq_metrics"), dict) and isinstance(record.get("loadrunner"), dict):
+            continuous_verification_count += 1
+
         loadrunner = record.get("loadrunner")
         if isinstance(loadrunner, dict):
             action_loadrunner_total[action] += 1
@@ -137,6 +149,20 @@ def build_release_dashboard(records: list[dict[str, Any]]) -> dict[str, Any]:
             "pass_rate": round(ctq_pass_counts[metric_name] / total, 3) if total else 0.0,
         }
 
+    total_records = len(records)
+    identity_rate = round(identity_verified_count / total_records, 3) if total_records else 0.0
+    policy_decision_rate = round(policy_decision_count / total_records, 3) if total_records else 0.0
+    continuous_verification_rate = round(continuous_verification_count / total_records, 3) if total_records else 0.0
+
+    if total_records == 0:
+        posture = "insufficient_data"
+    elif identity_rate >= 0.99 and policy_decision_rate >= 0.99 and continuous_verification_rate >= 0.95:
+        posture = "strong"
+    elif identity_rate >= 0.95 and policy_decision_rate >= 0.95:
+        posture = "moderate"
+    else:
+        posture = "needs_hardening"
+
     return {
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "summary": {
@@ -158,6 +184,18 @@ def build_release_dashboard(records: list[dict[str, Any]]) -> dict[str, Any]:
             "avg_dpmo": _average(all_dpmo),
             "sigma_band_counts": dict(sigma_band_counts),
             "control_state_counts": dict(control_state_counts),
+        },
+        "zero_trust": {
+            "posture": posture,
+            "identity_verification_rate": identity_rate,
+            "policy_decision_rate": policy_decision_rate,
+            "continuous_verification_rate": continuous_verification_rate,
+            "policy_deny_rate": round(total_blocked / total_records, 3) if total_records else 0.0,
+            "signals": {
+                "identity_per_request": identity_rate >= 0.99,
+                "explicit_policy_decision_per_request": policy_decision_rate >= 0.99,
+                "runtime_quality_attestation": continuous_verification_rate >= 0.95,
+            },
         },
     }
 

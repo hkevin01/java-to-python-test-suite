@@ -905,6 +905,37 @@ jobs:
 
 The suite now includes proof-style parity tests that run the same function behavior in both legacy Java and translated Python and assert identical outputs for shared input vectors.
 
+### What Is A Vector, Vectoring, And A Vector Runner?
+
+In this repository, a **vector** means one structured test case: input values plus the expected output.
+
+Example vector concept:
+- Input: `base=5`, `multiplier=10`, `premium=true`
+- Expected output: `75`
+
+That single row is one vector. A vector file is a list of many such rows (normal, edge, and negative scenarios).
+
+**Vectoring** is the testing approach where both runtimes (legacy Java and translated Python) are driven from that same shared vector dataset instead of hardcoded test values in multiple places.
+
+Why vectoring is useful:
+- Single source of truth for migration parity expectations
+- Less duplicated test data across languages
+- Easier reviews and audits of behavioral requirements
+- Faster updates when business rules change
+
+**Vector Runner** in this project:
+- `LegacyCalculatorVectorRunner.java` reads the shared JSON vectors
+- Executes the legacy Java function for each vector
+- Emits per-case output (`id, actual, expected`) for parity checks
+
+This is how we prove output equivalence:
+1. Define vectors in shared JSON/CSV fixture files
+2. Run legacy Java against those vectors
+3. Run translated Python against those same vectors
+4. Assert Java output equals Python output for each vector id
+
+This pattern gives an explicit migration proof: same inputs, same outputs, across runtimes.
+
 | Proof Test | What It Verifies | Location |
 |---|---|---|
 | Java fixture expected-value test | Legacy Java behavior is stable and explicit | `tests/correctness/test_legacy_java_python_equivalence.py` |
@@ -938,6 +969,25 @@ Fixture sources:
 | Testcontainers | Reproducible Java runtime execution | Stable local runtime parity in isolated containers (recommended next) |
 
 Practical recommendation: keep a shared vector file and run both Java and Python against it, treating Java output as the initial oracle during migration.
+
+### Zero-Trust Solutions Matrix
+
+| Zero-Trust Control | What It Means | Project Implementation | Evidence |
+|---|---|---|---|
+| Verify identity on every request | No implicit trust by network location | JWT verification + RBAC dependency checks in API routes | `tests/negative/test_rbac_enforcement.py` |
+| Explicit policy decision per request | Each request must be allow/deny evaluated | Input guardrails, model lock, egress policy lock, blocked audit path | `tests/negative/test_model_blocking.py`, `tests/negative/test_egress_blocking.py`, `tests/adversarial/test_prompt_injection.py` |
+| Least privilege access | Users only get required capabilities | Role-permission mapping with permission-scoped endpoints | `core/auth.py`, `tests/negative/test_rbac_enforcement.py` |
+| Continuous verification | Runtime signals prove controls remain active | Audit report includes zero-trust rates, quality attestations, deny rate | `/api/v1/audit-report` zero-trust section |
+| Assume breach + contain blast radius | Treat unsafe inputs as hostile by default | Block injection/secret payloads and sanitize audit records | `guardrails/input_guard.py`, `guardrails/output_guard.py`, `tests/integration/test_audit_trail.py` |
+
+The release dashboard now includes a dedicated `zero_trust` section with:
+- `posture`
+- `identity_verification_rate`
+- `policy_decision_rate`
+- `continuous_verification_rate`
+- `policy_deny_rate`
+
+This makes zero-trust status measurable release-over-release instead of purely descriptive.
 
 ### Requirements-to-Implementation Mapping
 

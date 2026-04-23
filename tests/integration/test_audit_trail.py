@@ -252,5 +252,9 @@ async def test_audit_report_endpoint_aggregates_release_dashboard(engineer_clien
     assert "translate_project" in body["actions"]
     assert "performance" in body
     assert "quality" in body
+    assert "zero_trust" in body
     assert "ctq_metrics" in body["quality"]
+    assert "posture" in body["zero_trust"]
+    assert 0.0 <= body["zero_trust"]["identity_verification_rate"] <= 1.0
+    assert 0.0 <= body["zero_trust"]["policy_decision_rate"] <= 1.0
     assert body["viewer"] == "audit-test-user"
