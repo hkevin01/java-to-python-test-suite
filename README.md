@@ -229,13 +229,155 @@ This is why tests verify examples such as Order before OrderService and Abstract
 
 ## Why Kahn's Algorithm Matters Here
 
-Kahn's algorithm is a topological sorting method for directed acyclic graphs.
+### What is Kahn's Algorithm? (Layman's Explanation)
 
-High-level behavior:
+Imagine you have a to-do list with dependencies:
+- Task A: "Learn Python" (must do first)
+- Task B: "Build a web app" (depends on Task A - you need Python knowledge)
+- Task C: "Deploy the app" (depends on Task B - you need a working app to deploy)
+
+You can't do Task B until Task A is done. You can't do Task C until Task B is done. **Kahn's algorithm automatically figures out the correct order to do tasks when there are many interdependencies.**
+
+In our case, we have Java classes instead of tasks:
+- Order.java (no dependencies - do first)
+- OrderService.java (depends on Order)
+- OrderRepository.java (depends on both Order and OrderService)
+
+Kahn's algorithm ensures Order.java is translated to Python before OrderService.java, which is translated before OrderRepository.java.
+
+### How Kahn's Algorithm Works (Step by Step)
+
+**Step 1: Count Prerequisites (In-Degree)**
+For each class, count how many other classes it needs:
+```
+Order:             0 dependencies (no prerequisites)
+OrderService:      1 dependency (depends on Order)
+OrderRepository:   2 dependencies (depends on Order and OrderService)
+```
+
+**Step 2: Find Classes with Zero Prerequisites**
+Start with classes that don't depend on anything:
+```
+Queue = [Order]  (has 0 dependencies)
+```
+
+**Step 3: Process One Class at a Time**
+- Take Order from the queue
+- Tell all classes that depend on Order: "Order is done!"
+- OrderService loses one dependency (Order is now satisfied)
+- OrderRepository loses one dependency (Order is now satisfied)
+- Check if any class now has zero dependencies:
+  - OrderService: 1 - 1 = 0 dependencies left → Add to queue!
+```
+Processed = [Order]
+Queue = [OrderService]
+```
+
+**Step 4: Repeat**
+- Take OrderService from the queue
+- Tell OrderRepository: "OrderService is done!"
+- OrderRepository: 2 - 1 = 1 dependency left (still needs Order, but it's already done)
+  - Actually, Order was already processed, so OrderRepository should have 1 left
+  - But both its dependencies (Order, OrderService) are done → Add to queue!
+```
+Processed = [Order, OrderService]
+Queue = [OrderRepository]
+```
+
+- Take OrderRepository from the queue
+- No classes depend on it
+```
+Processed = [Order, OrderService, OrderRepository]
+Queue = []  (empty - we're done!)
+```
+
+**Step 5: Detect Cycles**
+If some classes remain with unmet dependencies after processing everything, there's a **circular dependency** (cycle):
+- A depends on B
+- B depends on C
+- C depends on A (creates a circle!)
+
+These classes can't be properly ordered, but the algorithm includes them anyway so you're aware of the problem.
+
+### Algorithm Pseudo-Code
+
+```
+function KahnSort(graph):
+    // Count how many dependencies each node has
+    for each node in graph:
+        in_degree[node] = count of nodes it depends on
+    
+    // Find who depends on whom (reverse lookup)
+    for each edge (A depends on B):
+        dependents[B].add(A)
+    
+    // Start with nodes that have no dependencies
+    queue = [all nodes where in_degree = 0]
+    result = []
+    
+    // Process nodes in order
+    while queue is not empty:
+        current = queue.pop()
+        result.add(current)
+        
+        // For each node that depends on current:
+        for each dependent in dependents[current]:
+            dependent.in_degree -= 1
+            if dependent.in_degree = 0:
+                queue.add(dependent)
+    
+    // Check for cycles
+    if result.size < graph.size:
+        had_cycle = TRUE
+        // Add remaining nodes (they're in a cycle)
+        result.add(remaining nodes)
+    
+    return (result, had_cycle)
+```
+
+### Real-World Code Example from This Project
+
+When we have Java files:
+
+```java
+// Order.java
+public class Order { ... }
+
+// OrderService.java
+public class OrderService {
+    private Order order;  // depends on Order!
+    ...
+}
+
+// OrderRepository.java
+public interface OrderRepository {
+    Order findById(String id);  // depends on Order!
+}
+```
+
+Kahn's algorithm outputs: `[Order, OrderService, OrderRepository]`
+
+This guarantees:
+- Order is translated first
+- OrderService can reference Order class (exists in Python)
+- OrderRepository can reference Order class (exists in Python)
+
+### Why Not Just Random Order?
+
+If we translated OrderService before Order:
+```python
+class OrderService:
+    def __init__(self):
+        self.order: Order  # ERROR! Order not defined yet!
+```
+
+This fails because Order doesn't exist yet. Kahn's algorithm prevents this.
+
+### High-level behavior (The original formulation):
 
 1. Compute in-degree for each node.
 2. Start with nodes that have in-degree 0 (no unmet dependencies).
-3. Remove processed nodes and decrement neighbors.
+3. Remove processed nodes and decrement neighbors' in-degree.
 4. Continue until all nodes are processed.
 5. If nodes remain with non-zero in-degree, a cycle exists.
 
@@ -248,17 +390,21 @@ In this test suite, that behavior directly supports translation correctness:
 ```mermaid
 sequenceDiagram
   participant Graph as Dependency Graph
-  participant Kahn as Kahn Sort
+  participant Kahn as Kahn Sort (In-Degree)
   participant Planner as Translation Planner
-  Graph->>Kahn: Nodes + edges
-  Kahn->>Kahn: Process zero in-degree queue
-  Kahn-->>Planner: dependency_order
+  Graph->>Kahn: Nodes + dependency edges
+  Kahn->>Kahn: 1. Compute in-degree (# dependencies per node)
+  Kahn->>Kahn: 2. Find nodes with in-degree = 0
+  Kahn->>Kahn: 3. Process each in order, decrement neighbors
+  Kahn->>Kahn: 4. Continue until queue empty
+  Kahn->>Kahn: 5. Check if nodes remain (cycle detection)
+  Kahn-->>Planner: dependency_order list
   Kahn-->>Planner: had_cycle flag
   Planner-->>Planner: translate base classes before subclasses
 ```
 
 > [!TIP]
-> Kahn's approach is deterministic and testable: each assertion can verify that every dependency index is lower than its dependent index.
+> Kahn's approach is deterministic and testable: each assertion can verify that every dependency index is lower than its dependent index. The algorithm guarantees: if class B must be translated before class A (A depends on B), then index(B) < index(A) in the output list.
 
 <p align="right">(<a href="#top">back to top</a>)</p>
 

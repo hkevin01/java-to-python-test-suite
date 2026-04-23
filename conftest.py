@@ -417,6 +417,11 @@ class Order:
     amount: float
     status: OrderStatus = OrderStatus.PENDING
 
+    def __init__(self, id: str, amount: float, status: OrderStatus = OrderStatus.PENDING) -> None:
+        self.id = id
+        self.amount = amount
+        self.status = status
+
     @property
     def is_pending(self) -> bool:
         return self.status == OrderStatus.PENDING
@@ -433,6 +438,9 @@ from order import Order, OrderStatus
 class OrderService:
     _orders: list[Order] = field(default_factory=list)
 
+    def __init__(self) -> None:
+        self._orders = []
+
     def enqueue(self, order: Order) -> None:
         self._orders.append(order)
 
@@ -448,13 +456,13 @@ class OrderService:
 
 PYTHON_IREPOSITORY_MOCK = """\
 from __future__ import annotations
-from typing import Protocol, TypeVar, Generic, Optional
+from typing import Protocol, TypeVar, Optional
 
 T = TypeVar("T")
 ID = TypeVar("ID")
 
 
-class IRepository(Protocol[T, ID]):
+class IRepository(Protocol):
     def find_by_id(self, id: ID) -> Optional[T]: ...
     def find_all(self) -> list[T]: ...
     def save(self, entity: T) -> T: ...

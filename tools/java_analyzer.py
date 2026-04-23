@@ -110,6 +110,18 @@ def parse_java_class(source: str | None) -> Optional[JavaClassInfo]:
         for ctor in getattr(type_decl, "constructors", []) or []:
             methods.append(ctor.name)
 
+        if not imports:
+            inferred_types = set(re.findall(r"\b[A-Z][A-Za-z0-9_]*\b", text))
+            inferred_types.discard(type_decl.name)
+            inferred_types.discard("String")
+            inferred_types.discard("Integer")
+            inferred_types.discard("Long")
+            inferred_types.discard("Double")
+            inferred_types.discard("Float")
+            inferred_types.discard("Boolean")
+            inferred_types.discard("Object")
+            imports.extend(sorted(inferred_types))
+
         is_interface = isinstance(type_decl, javalang.tree.InterfaceDeclaration)
         is_abstract = ("abstract" in getattr(type_decl, "modifiers", set())) and not is_interface
 

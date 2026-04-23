@@ -13,20 +13,22 @@ MAX_INPUT_BYTES = MAX_INPUT_TOKENS * 4
 
 INJECTION_PATTERNS = [
     r"ignore\s+all\s+previous\s+instructions",
+    r"ignore\s+previous\s+instructions",
     r"you\s+are\s+now\s+a\s+different\s+assistant",
     r"disregard\s+(your\s+)?system\s+prompt",
     r"\bjailbreak\b",
     r"\bdan\s+mode\b",
     r"repeat\s+after\s+me",
+    r"\bact\s+as\s+an?\s+unrestricted",
     r"\bact\s+as\s+(a\s+)?different",
     r"without\s+restrictions",
 ]
 
 SECRET_PATTERNS = [
-    r"\bpassword\s*[:=]\s*[\"']?[^\s\"']{4,}",
-    r"\bpwd\s*[:=]\s*[\"']?[^\s\"']{4,}",
-    r"\bapi[_-]?key\s*[:=]\s*[\"']?[^\s\"']{6,}",
-    r"\bapiKey\s*[:=]\s*[\"']?[^\s\"']{6,}",
+    r"\bpassword\b\s*[:=]\s*(?:[\"'][^\"']{4,}[\"']|[A-Za-z0-9_\-]*\d[A-Za-z0-9_\-]*)",
+    r"\bpwd\b\s*[:=]\s*(?:[\"'][^\"']{4,}[\"']|[A-Za-z0-9_\-]*\d[A-Za-z0-9_\-]*)",
+    r"\bapi[_-]?key\s*[:=]\s*(?:[\"'][^\"']{6,}[\"']|[A-Za-z0-9_\-]{8,})",
+    r"\bapiKey\s*[:=]\s*(?:[\"'][^\"']{6,}[\"']|[A-Za-z0-9_\-]{8,})",
     r"\bAKIA[0-9A-Z]{16}\b",
     r"\baws_access_key_id\b",
     r"\baws_secret_access_key\b",
@@ -36,7 +38,6 @@ SECRET_PATTERNS = [
     r"\bAuthorization\s*:\s*Bearer\s+",
     r"\bsk-[A-Za-z0-9]{12,}\b",
 ]
-
 _INJECTION_REGEXES = [re.compile(p, re.IGNORECASE) for p in INJECTION_PATTERNS]
 _SECRET_REGEXES = [re.compile(p, re.IGNORECASE) for p in SECRET_PATTERNS]
 _HTML_RE = re.compile(r"<[^>]+>")
@@ -59,8 +60,10 @@ def sanitize(text: str | None) -> str:
     if len(cleaned.encode("utf-8")) > MAX_INPUT_BYTES:
         raise InputGuardError("input length exceeds guardrail limit")
 
+    normalized = re.sub(r"[^A-Za-z0-9]+", " ", cleaned).strip()
+
     for rgx in _INJECTION_REGEXES:
-        if rgx.search(cleaned):
+        if rgx.search(cleaned) or rgx.search(normalized):
             raise InputGuardError("injection pattern detected")
 
     for rgx in _SECRET_REGEXES:
