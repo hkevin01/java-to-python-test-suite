@@ -35,6 +35,7 @@ This project uses a Python + pytest stack because it maximizes test expressivene
 - [Executive Summary](#executive-summary)
 - [Overview](#overview)
 - [Requirements to Validation Mapping](#requirements-to-validation-mapping)
+- [Requirements Verification and Validation](#requirements-verification-and-validation)
 - [Architecture](#architecture)
 - [Object Model](#object-model)
 - [Dependency Graph and Topological Sort](#dependency-graph-and-topological-sort)
@@ -75,6 +76,56 @@ Core value for this project:
 | Detect cycles without dropping files | Cycle fallback behavior | `tests/adversarial/test_circular_dependencies.py` and unit cycle tests | `had_cycle` is true and all files remain represented |
 | Block unsafe or manipulative input | Input guardrails | `tests/adversarial/test_prompt_injection.py` and `tests/unit/test_guardrails.py` | Injection/secret patterns rejected before model path |
 | Enforce RBAC and policy boundaries | JWT + permission checks | `tests/negative/test_rbac_enforcement.py` | Unauthorized roles/actions are denied |
+
+<p align="right">(<a href="#top">back to top</a>)</p>
+
+## Requirements Verification and Validation
+
+This suite applies both verification and validation:
+
+- Verification asks: are we building the system right against explicit requirements?
+- Validation asks: are we building the right behavior for secure translation operations?
+
+### V&V Strategy Matrix
+
+| Requirement Area | Verification Method | Validation Method | Pass Criteria | Primary Evidence |
+|---|---|---|---|---|
+| Dependency graph correctness | Unit assertions on graph edges and node invariants | Integration checks of API dependency output | No self-loops, no missing files, dependency-first order | `tests/unit/test_dependency_graph.py`, `tests/integration/test_project_translate_api.py` |
+| Topological ordering (base before subclass) | Unit invariant checks for order index relationships | Project-level translate API response order checks | For every edge A depends on B, index(B) < index(A) | `tests/unit/test_topological_sort.py`, `tests/integration/test_project_translate_api.py` |
+| Cycle detection robustness | Unit and adversarial cycle test scenarios | End-to-end circular project request handling | `had_cycle` true on cyclic input, all files retained in output | `tests/adversarial/test_circular_dependencies.py`, `tests/unit/test_topological_sort.py` |
+| Security guardrails | Unit and adversarial pattern blocking tests | API-level blocked request behavior checks | Injection and credential patterns rejected before unsafe processing | `tests/unit/test_guardrails.py`, `tests/adversarial/test_prompt_injection.py` |
+| RBAC and auth correctness | Negative role/permission tests | Unauthorized API paths return denied responses | Role permissions enforced with no privilege escalation | `tests/negative/test_rbac_enforcement.py`, integration auth tests |
+| Output structure fidelity | Correctness tests over syntax/import/signatures | Workflow-level usage consistency checks | Outputs remain parseable and structurally aligned to expectations | `tests/correctness/*.py` |
+
+### Verification Pipeline
+
+```mermaid
+flowchart TD
+  A[Requirements] --> B[Unit Verification]
+  B --> C[Integration Verification]
+  C --> D[Negative and Adversarial Verification]
+  D --> E[Validation Against Runtime Behaviors]
+  E --> F[Release Confidence Decision]
+```
+
+### Validation Acceptance Gates
+
+| Gate | Scope | Command Pattern | Minimum Acceptance |
+|---|---|---|---|
+| Gate 1 | Core logic verification | `pytest -m unit -q` | All dependency/order/parser tests pass |
+| Gate 2 | API contract verification | `pytest -m integration -q` | Endpoint contract fields and ordering checks pass |
+| Gate 3 | Security validation | `pytest -m negative -q && pytest -m adversarial -q` | RBAC, injection, and egress/model policy checks pass |
+| Gate 4 | Output quality validation | `pytest -m correctness -q` | Output syntax/structure/import quality checks pass |
+| Gate 5 | Full-system confidence | `pytest -q` | No regressions across all marker groups |
+
+### Traceability Notes
+
+- Requirement-to-test traceability is explicit through marker groups and targeted modules.
+- Visualization-to-requirement traceability is captured by architecture, object model, and dependency diagrams.
+- Algorithm-to-requirement traceability is captured by Kahn ordering assertions that enforce base-before-subclass translation.
+
+> [!NOTE]
+> V&V is strongest when failures are triaged by marker group first, then by requirement area, so remediation stays requirement-focused rather than only test-focused.
 
 <p align="right">(<a href="#top">back to top</a>)</p>
 
