@@ -901,6 +901,32 @@ jobs:
 | **Voice of customer / CTQ translation** | Convert user needs into measurable gates | README requirement tables map behavior to tests and tooling | Traceability matrices |
 | **Continuous improvement** | Use data from each run to tighten the process | Audit + coverage + static analysis + performance gates | CI pipeline and audit summaries |
 
+### Legacy Java-to-Python Function Parity (Proof Tests)
+
+The suite now includes proof-style parity tests that run the same function behavior in both legacy Java and translated Python and assert identical outputs for shared input vectors.
+
+| Proof Test | What It Verifies | Location |
+|---|---|---|
+| Java fixture expected-value test | Legacy Java behavior is stable and explicit | `tests/correctness/test_legacy_java_python_equivalence.py` |
+| Python fixture expected-value test | Translated Python behavior matches intended outputs | `tests/correctness/test_legacy_java_python_equivalence.py` |
+| Cross-language equivalence test | Java output == Python output for the same inputs | `tests/correctness/test_legacy_java_python_equivalence.py` |
+
+Fixture sources:
+- `fixtures/java/simple/LegacyCalculator.java`
+- `fixtures/expected_python/legacy_calculator.py`
+
+### Tools That Already Support This Testing Pattern
+
+| Tool | How It Helps With Java-to-Python Parity | Typical Use |
+|---|---|---|
+| `pytest` parameterized tests | Reuse the same vectors for both runtimes | Core parity assertions |
+| JUnit 5 parameterized tests | Capture legacy Java oracle outputs | Legacy baseline generation |
+| ApprovalTests | Golden-master snapshot comparisons | Regression lock for legacy outputs |
+| JSON/CSV test vectors | Runtime-agnostic shared inputs/outputs | Single source of truth for parity data |
+| Testcontainers | Reproducible Java runtime for parity execution | Stable local/CI runtime (optional) |
+
+Practical recommendation: keep a shared vector file and run both Java and Python against it, treating Java output as the initial oracle during migration.
+
 ### Requirements-to-Implementation Mapping
 
 | Requirement (README) | Test (pytest) | Security Check | Quality Gate | Coverage |
