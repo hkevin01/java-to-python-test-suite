@@ -481,7 +481,7 @@ This test suite can be enhanced through integration with specialized testing, an
 | **pytest-cov** | Code coverage measurement | Coverage plugin, post-test | Line/branch coverage % | Verify guardrails touch all code paths | Open-source |
 | **Codecov** | Coverage tracking & trending | CI upload, GitHub integration | Coverage trends, PR diffs | Long-term quality visibility | Free/Pro |
 | **Datadog** | Continuous testing & monitoring | API instrumentation | Test performance, flakiness | Detect regression patterns | Commercial |
-| **RoadRunner** | PHP app testing (optional) | Parallel test execution | PHP-specific test metrics | If Python→PHP translation tested | Open-source |
+| **LoadRunner** | Performance and load testing | Scheduled pipeline stage, release gate | Response times, throughput, error rate, SLA compliance | Validate API under expected translation volume | Commercial |
 
 **Recommended first addition:** `pytest-cov` to verify that guardrail code paths (input_guard, output_guard, provider_lock) are fully exercised.
 
@@ -713,7 +713,36 @@ POST /api/v2/add_result_for_case/1/123
 }
 ```
 
-### 7. CI/CD Pipeline with All Tools (Complete Setup)
+### 7. LoadRunner Performance Integration
+
+LoadRunner fits this project as the dedicated non-functional gate for the FastAPI endpoints:
+
+| Endpoint | Suggested LoadRunner Transaction | Default SLA | Primary Assertion | Current Project Hook |
+|---|---|---|---|---|
+| `/api/v1/translate` | `translate` | 250 ms | Median and p95 stay within SLA | Audit log writes `loadrunner` transaction summary |
+| `/api/v1/translate-project` | `translate_project` | 500 ms | Multi-file requests stay below release threshold | Audit log writes per-request performance budget status |
+| `/api/v1/translate-requirements` | `translate_requirements` | 250 ms | Requirements scaffolding stays responsive | Audit log writes Six Sigma-style CTQ metrics |
+
+This repository now exposes LoadRunner-friendly transaction metadata in audit records:
+
+```json
+{
+  "action": "translate",
+  "latency_ms": 83.2,
+  "performance_budget_ms": 250,
+  "performance_status": "within_control",
+  "loadrunner": {
+    "transaction": "translate",
+    "response_time_ms": 83.2,
+    "sla_ms": 250,
+    "passed": true
+  }
+}
+```
+
+That makes it straightforward to compare internal audit data with external LoadRunner runs and to use the same transaction names in performance dashboards.
+
+### 8. CI/CD Pipeline with All Tools (Complete Setup)
 
 Recommended GitHub Actions workflow:
 
@@ -749,6 +778,12 @@ jobs:
       # Test execution
       - name: Run tests
         run: pytest --cov=guardrails --cov=core --cov-report=xml
+
+      # Performance regression gate
+      - name: Run LoadRunner suite
+        if: env.LOADRUNNER_SCENARIO_ID != ''
+        run: |
+          echo "Trigger LoadRunner scenario $LOADRUNNER_SCENARIO_ID against /api/v1 endpoints"
       
       # Coverage upload
       - name: Upload coverage
@@ -768,6 +803,34 @@ jobs:
           sonar-scanner -Dsonar.host.url=${{ secrets.SONAR_HOST_URL }} \
                        -Dsonar.login=${{ secrets.SONAR_TOKEN }}
 ```
+
+### Testing Algorithm Matrix
+
+| Algorithm / Technique | What It Does | Where It Appears In This Project | Why It Improves Confidence |
+|---|---|---|---|
+| **Topological sorting (Kahn)** | Orders dependent nodes safely | `tools/project_translator.py`, `tests/unit/test_topological_sort.py` | Prevents subclass-before-base translation defects |
+| **Boundary value analysis** | Hits min/max and edge inputs | `tests/adversarial/test_boundary_conditions.py` | Finds off-by-one and empty-input failures quickly |
+| **Equivalence partitioning** | Tests one representative per input class | Guardrail and malformed-input tests | Keeps coverage broad without exploding test count |
+| **Decision-table testing** | Covers combinations of conditions and outcomes | RBAC and forbidden-pattern tests | Ensures policy combinations do not create gaps |
+| **State-transition testing** | Verifies behavior across state changes | Audit trail blocked/allowed request scenarios | Confirms system reacts correctly as request status changes |
+| **Cycle detection** | Detects unsortable dependency graphs | `tests/adversarial/test_circular_dependencies.py` | Verifies graceful degradation on invalid project graphs |
+| **Mutation testing** | Injects fake bugs to measure test strength | Documented via `mutmut` / Stryker integration path | Confirms tests fail when logic is wrong |
+| **Load testing** | Measures latency and throughput under concurrency | LoadRunner integration and audit metrics | Protects release readiness under realistic traffic |
+| **Risk-based prioritization** | Focuses effort on highest-risk paths | Negative, adversarial, and auth tests | Keeps security-critical paths heavily defended |
+| **Pairwise / combinatorial sampling** | Reduces huge input combinations to meaningful pairs | Recommended next step for API option matrices | Expands coverage efficiently for future input flags |
+
+### Six Sigma and Process Quality Matrix
+
+| Six Sigma Idea | Meaning In Plain Terms | Project Implementation | Evidence / Metric |
+|---|---|---|---|
+| **CTQ (Critical to Quality)** | The small set of outcomes that must go right | Audit records now track latency, reliability, safety, traceability | `ctq_metrics` in audit log |
+| **DMAIC** | Define, Measure, Analyze, Improve, Control loop | README traceability + tests + audit metrics + quality gates | Requirements tables, tests, and audit trail |
+| **DPMO** | Defects per million opportunities | Quality snapshot computes DPMO per request | `six_sigma.dpmo` in audit log |
+| **Control state** | Is the process stable or drifting? | Requests classified as `in_control`, `watch`, or `out_of_control` | `six_sigma.control_state` |
+| **Performance control limits** | Expected latency window before escalation | Per-endpoint SLA budgets in env and audit metrics | `performance_budget_ms`, `performance_status` |
+| **FMEA mindset** | Rank likely failures before release | Negative/adversarial suites focus on auth, injection, model lock, egress | Security-focused test groups |
+| **Voice of customer / CTQ translation** | Convert user needs into measurable gates | README requirement tables map behavior to tests and tooling | Traceability matrices |
+| **Continuous improvement** | Use data from each run to tighten the process | Audit + coverage + static analysis + performance gates | CI pipeline and audit summaries |
 
 ### Requirements-to-Implementation Mapping
 

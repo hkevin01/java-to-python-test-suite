@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 import hashlib
 import json
 import os
+from time import perf_counter
 import re
 from typing import Any
 from uuid import uuid4
@@ -12,6 +13,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from core.auth import permission_dependency
+from core.quality_metrics import build_quality_snapshot
 from guardrails.input_guard import InputGuardError, sanitize
 from guardrails.output_guard import validate_output
 from tools.java_analyzer import parse_java_class
@@ -80,6 +82,7 @@ async def translate(
     req: TranslateRequest,
     user: dict = Depends(permission_dependency("translate")),
 ):
+    started_at = perf_counter()
     session_id = str(uuid4())
     if not req.code.strip() and not req.prompt.strip():
         _write_audit(
@@ -90,6 +93,7 @@ async def translate(
                 "status": "blocked",
                 "reason": "empty_input",
                 "session_id": session_id,
+                **build_quality_snapshot(action="translate", latency_ms=(perf_counter() - started_at) * 1000),
             }
         )
         raise HTTPException(status_code=400, detail="empty code and prompt")
@@ -105,6 +109,7 @@ async def translate(
                 "status": "blocked",
                 "reason": str(exc),
                 "session_id": session_id,
+                **build_quality_snapshot(action="translate", latency_ms=(perf_counter() - started_at) * 1000),
             }
         )
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -124,6 +129,7 @@ async def translate(
             "input_sha": _hash_text(safe_code),
             "output_sha": _hash_text(python_out),
             "class": class_name,
+            **build_quality_snapshot(action="translate", latency_ms=(perf_counter() - started_at) * 1000),
         }
     )
 
@@ -144,6 +150,7 @@ async def translate_project(
     req: TranslateProjectRequest,
     user: dict = Depends(permission_dependency("translate")),
 ):
+    started_at = perf_counter()
     session_id = str(uuid4())
     if not req.files:
         raise HTTPException(status_code=422, detail="files must not be empty")
@@ -161,6 +168,7 @@ async def translate_project(
                 "status": "blocked",
                 "reason": str(exc),
                 "session_id": session_id,
+                **build_quality_snapshot(action="translate_project", latency_ms=(perf_counter() - started_at) * 1000),
             }
         )
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -182,6 +190,13 @@ async def translate_project(
             "had_cycle": plan.had_cycle,
             "session_id": session_id,
             "file_count": len(req.files),
+            **build_quality_snapshot(
+                action="translate_project",
+                latency_ms=(perf_counter() - started_at) * 1000,
+                defects=1 if plan.had_cycle else 0,
+                units=max(len(req.files), 1),
+                opportunities_per_unit=3,
+            ),
         }
     )
 
@@ -198,6 +213,7 @@ async def translate_requirements(
     req: TranslateRequirementsRequest,
     user: dict = Depends(permission_dependency("translate")),
 ):
+    started_at = perf_counter()
     session_id = str(uuid4())
     text = (req.text or "").strip()
     if not text:
@@ -214,6 +230,7 @@ async def translate_requirements(
             "session_id": session_id,
             "input_sha": _hash_text(text),
             "output_sha": _hash_text(python_out),
+            **build_quality_snapshot(action="translate_requirements", latency_ms=(perf_counter() - started_at) * 1000),
         }
     )
 

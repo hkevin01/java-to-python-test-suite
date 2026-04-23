@@ -51,6 +51,12 @@ def _mock_llm(ret: str = "def ok(): pass"):
     return patch("api.routes.call_llm", new=AsyncMock(return_value=ret))
 
 
+def _latest_record(path: str) -> dict:
+    records = _read_audit(path)
+    assert records, "Expected at least one audit record"
+    return records[-1]
+
+
 # ---------------------------------------------------------------------------
 # Audit record produced for translate request
 # ---------------------------------------------------------------------------
@@ -110,6 +116,37 @@ async def test_audit_record_has_timestamp(engineer_client):
     assert any(ts_fields & set(r.keys()) for r in records), (
         "No audit record with timestamp field"
     )
+
+
+@pytest.mark.asyncio
+async def test_audit_record_has_latency_and_loadrunner_metrics(engineer_client):
+    client, audit_path = engineer_client
+    from conftest import JAVA_ORDER
+    with _mock_llm():
+        await client.post(
+            "/api/v1/translate",
+            json={"code": JAVA_ORDER, "style": "idiomatic"},
+        )
+    record = _latest_record(audit_path)
+    assert isinstance(record.get("latency_ms"), (int, float))
+    assert "loadrunner" in record
+    assert record["loadrunner"]["transaction"] == "translate"
+
+
+@pytest.mark.asyncio
+async def test_audit_record_has_six_sigma_metrics(engineer_client):
+    client, audit_path = engineer_client
+    from conftest import JAVA_ORDER
+    with _mock_llm():
+        await client.post(
+            "/api/v1/translate",
+            json={"code": JAVA_ORDER, "style": "idiomatic"},
+        )
+    record = _latest_record(audit_path)
+    six_sigma = record.get("six_sigma", {})
+    assert "dpmo" in six_sigma
+    assert "sigma_band" in six_sigma
+    assert "control_state" in six_sigma
 
 
 # ---------------------------------------------------------------------------
