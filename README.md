@@ -913,17 +913,29 @@ The suite now includes proof-style parity tests that run the same function behav
 
 Fixture sources:
 - `fixtures/java/simple/LegacyCalculator.java`
+- `fixtures/java/simple/LegacyCalculatorVectorRunner.java`
 - `fixtures/expected_python/legacy_calculator.py`
+- `fixtures/vectors/legacy_calculator_vectors.json`
+- `fixtures/vectors/legacy_calculator_vectors.csv`
+
+### Shared Vector Baseline (Single Source Of Truth)
+
+| Asset | Runtime Consumer | Purpose | Status |
+|---|---|---|---|
+| `legacy_calculator_vectors.json` | Python parity tests + Java vector runner | Canonical vector source (id, input, expected) | Implemented |
+| `legacy_calculator_vectors.csv` | Optional import/export interoperability | Spreadsheet-friendly mirror for manual review | Implemented |
+| `LegacyCalculatorVectorRunner.java` | Java runtime | Reads shared JSON vectors and evaluates legacy function | Implemented |
+| `test_legacy_java_python_equivalence.py` | pytest | Parameterized cross-runtime parity assertions | Implemented |
 
 ### Tools That Already Support This Testing Pattern
 
 | Tool | How It Helps With Java-to-Python Parity | Typical Use |
 |---|---|---|
-| `pytest` parameterized tests | Reuse the same vectors for both runtimes | Core parity assertions |
-| JUnit 5 parameterized tests | Capture legacy Java oracle outputs | Legacy baseline generation |
-| ApprovalTests | Golden-master snapshot comparisons | Regression lock for legacy outputs |
-| JSON/CSV test vectors | Runtime-agnostic shared inputs/outputs | Single source of truth for parity data |
-| Testcontainers | Reproducible Java runtime for parity execution | Stable local/CI runtime (optional) |
+| `pytest` parameterized tests | Reuse the same vectors for both runtimes | Core parity assertions (implemented) |
+| JUnit 5 parameterized tests | Capture legacy Java oracle outputs | Legacy baseline generation (recommended next) |
+| ApprovalTests | Golden-master snapshot comparisons | Regression lock for legacy outputs (recommended next) |
+| JSON/CSV test vectors | Runtime-agnostic shared inputs/outputs | Single source of truth for parity data (implemented) |
+| Testcontainers | Reproducible Java runtime execution | Stable local runtime parity in isolated containers (recommended next) |
 
 Practical recommendation: keep a shared vector file and run both Java and Python against it, treating Java output as the initial oracle during migration.
 

@@ -1,0 +1,56 @@
+[
+  {
+    "id": "v1",
+    "input": {
+      "base": 5,
+      "multiplier": 10,
+      "premium": false
+    },
+    "expected": 50
+  },
+  {
+    "id": "v2",
+    "input": {
+      "base": 5,
+      "multiplier": 10,
+      "premium": true
+    },
+    "expected": 75
+  },
+  {
+    "id": "v3",
+    "input": {
+      "base": 8,
+      "multiplier": 12,
+      "premium": true
+    },
+    "expected": 100
+  },
+  {
+    "id": "v4",
+    "input": {
+      "base": 1,
+      "multiplier": 1,
+      "premium": false
+    },
+    "expected": 1
+  },
+  {
+    "id": "v5",
+    "input": {
+      "base": -4,
+      "multiplier": 10,
+      "premium": false
+    },
+    "expected": 0
+  },
+  {
+    "id": "v6",
+    "input": {
+      "base": 0,
+      "multiplier": 999,
+      "premium": true
+    },
+    "expected": 25
+  }
+]
