@@ -452,7 +452,338 @@ How this helps requirement comparison:
 
 <p align="right">(<a href="#top">back to top</a>)</p>
 
-## Test Suite Breakdown
+## Testing & Quality Assurance Tool Integration Matrix
+
+This test suite can be enhanced through integration with specialized testing, analysis, and verification tools. Below are recommended integrations organized by capability:
+
+### Static Code Analysis Tools (Top-to-Bottom Requirements Verification)
+
+| Tool | Purpose | Integration Point | Validates | Python Support | Cost Model |
+|---|---|---|---|---|---|
+| **Klocwork** (Perforce) | SAST - Security, quality, reliability | Pre-commit hooks, CI/CD pipeline | Security vulnerabilities, code defects, reliability issues | ✅ Yes | Enterprise/Commercial |
+| **SonarQube** | Code quality & maintainability | Post-test analysis, quality gates | Code quality, technical debt, duplication, test coverage | ✅ Yes | Open-source/Commercial |
+| **Checkmarx (SAST)** | Enterprise security scanning | Pipeline integration, compliance | Deep vulnerability analysis, compliance standards, OWASP | ✅ Yes | Enterprise/Commercial |
+| **Coverity** (Synopsys) | Deep static analysis | Build integration, incremental analysis | Memory/security issues, race conditions | ✅ Yes | Enterprise/Commercial |
+| **Bandit** | Python security scanning | Pre-commit, CI integration | Python security issues, hardcoding secrets | ✅ Yes (Python-specific) | Open-source |
+| **ESLint/Pylint** | Linting & style | Git hooks, pre-flight checks | Code style, suspicious patterns, imports | ✅ Yes (Pylint) | Open-source |
+
+**Why multiple tools?** Each excels in different domains:
+- Klocwork for security-first orgs needing compliance-grade SAST
+- SonarQube for quality gates and technical debt tracking
+- Checkmarx when regulatory/enterprise security is primary
+- Bandit/Pylint for lightweight pre-commit gating
+
+### Test Execution & Measurement Tools
+
+| Tool | Purpose | Integration Point | Metrics Collected | Use Case | Cost |
+|---|---|---|---|---|---|
+| **pytest** (current) | Unit/integration test framework | Direct test runner | Pass/fail, execution time | Core test execution | Open-source |
+| **pytest-cov** | Code coverage measurement | Coverage plugin, post-test | Line/branch coverage % | Verify guardrails touch all code paths | Open-source |
+| **Codecov** | Coverage tracking & trending | CI upload, GitHub integration | Coverage trends, PR diffs | Long-term quality visibility | Free/Pro |
+| **Datadog** | Continuous testing & monitoring | API instrumentation | Test performance, flakiness | Detect regression patterns | Commercial |
+| **RoadRunner** | PHP app testing (optional) | Parallel test execution | PHP-specific test metrics | If Python→PHP translation tested | Open-source |
+
+**Recommended first addition:** `pytest-cov` to verify that guardrail code paths (input_guard, output_guard, provider_lock) are fully exercised.
+
+### Mutation Testing (Test Quality Verification)
+
+| Tool | Purpose | How It Works | Value for This Suite | Python Support |
+|---|---|---|---|---|
+| **Stryker** | Mutation testing framework | Modifies code, reruns tests | Verifies tests catch real bugs | ✅ Yes |
+| **PIT** | Bytecode mutation (Java/JVM) | Mutates compiled bytecode | Validates our test harness quality | ✅ (via JVM) |
+
+**Application to this suite:** Run mutation tests on guardrails code (input_guard, output_guard, provider_lock) to ensure rejection logic is properly tested.
+
+### Dependency & Supply Chain Security
+
+| Tool | Purpose | Scans | Integration | Python Support |
+|---|---|---|---|---|
+| **Snyk** | Dependency vulnerability scanning | requirements.txt, package manifests | Pre-commit, PR checks, CI | ✅ Yes |
+| **OWASP Dependency-Check** | Known vulnerability database | Dependencies, transitive | CLI, Maven/Gradle, CI | ✅ Yes |
+| **Black Duck** (Synopsys) | License/composition analysis | Codebases, dependencies | CI pipeline, compliance | ✅ Yes |
+| **pip-audit** | Python package auditing | pip requirements | GitHub Actions, pre-commit | ✅ Yes (Python-specific) |
+
+**Why this matters:** fastapi, pytest, javalang, and cryptography dependencies must remain secure. Snyk + pip-audit provide light/fast scanning; Black Duck for enterprise compliance.
+
+### Requirements Verification & Traceability Tools
+
+| Tool | Function | Integration | Traceability | Compliance |
+|---|---|---|---|---|
+| **Azure DevOps Test Plans** | Requirements↔Tests mapping | Work items, test suites | Bi-directional links | CMMI/ISO ready |
+| **Jira Xray** | Test management within Jira | Issues, test runs, coverage | Requirement→Test→Result | Regulatory (FDA, etc.) |
+| **TestRail** | Standalone test management | API, CI integration | Test case traceability | SOC 2, HIPAA compatible |
+| **ReqIF Editor** | Requirements interchange format | File-based traceability | Spec→Design→Test | Automotive (ASIL) standard |
+
+**Current project:** README.md serves as living requirements. For regulated environments, migrate to one of above tools to create formal traceability matrix.
+
+### DevOps & CI/CD Integration Points
+
+| Pipeline Stage | Tool Category | Recommended Tool | What It Checks |
+|---|---|---|---|
+| **Pre-commit** | Linting + Security | Bandit, Pylint, Pre-commit hooks | Fast rejection of obvious issues |
+| **Build** | Static Analysis | Klocwork, SonarQube scanner | Deep security & quality analysis |
+| **Test** | Execution + Coverage | pytest + pytest-cov | Functional correctness, coverage % |
+| **Mutation** | Test Quality | Stryker or PIT | Are tests strong enough? |
+| **Dependency Scan** | Supply Chain | Snyk + pip-audit | Known vulnerabilities in deps |
+| **Compliance** | Reporting | SonarQube/Checkmarx dashboards | Meet quality gates, audit trail |
+
+### Top-to-Bottom Requirements Verification Example Flow
+
+```mermaid
+graph TD
+    A[Requirements<br/>README.md] -->|Defined as test markers| B[Test Suite<br/>387 tests]
+    B -->|Run on every commit| C[pytest<br/>Unit/Int/Correctness]
+    C -->|Coverage tracked| D[pytest-cov<br/>Code coverage %]
+    D -->|Trending| E[Codecov<br/>Historical view]
+    C -->|Mutation test| F[Stryker<br/>Test quality]
+    F -->|Validates| G{Tests strong<br/>enough?}
+    G -->|Yes| H[SonarQube<br/>Quality gates]
+    C -->|Security scan| I[Klocwork/Checkmarx<br/>Vulnerability detection]
+    I -->|Verify| J[Zero high-risk<br/>findings]
+    K[requirements.txt] -->|Supply chain scan| L[Snyk/pip-audit<br/>Dependency check]
+    H -->|Release gate| M[Deploy<br/>with confidence]
+    J -->|Security approval| M
+    L -->|No vulns found| M
+    style A fill:#e1f5ff
+    style M fill:#c8e6c9
+```
+
+This flow ensures:
+1. Requirements are explicit (README)
+2. Tests verify requirements (pytest suite)
+3. Tests are strong (mutation testing)
+4. Code is secure (static analysis + SAST)
+5. Dependencies are safe (supply chain scanning)
+6. Quality gates passed (SonarQube)
+
+<p align="right">(<a href="#top">back to top</a>)</p>
+
+## Integration Implementation Patterns
+
+### 1. Code Coverage with pytest-cov
+
+Add coverage measurement to verify all guardrail code is exercised:
+
+```bash
+# Run tests with coverage
+pytest --cov=guardrails --cov=core --cov-report=html --cov-report=term
+
+# Verify minimum coverage threshold
+pytest --cov=guardrails --cov-fail-under=90
+```
+
+In CI/CD (GitHub Actions example):
+```yaml
+- name: Run tests with coverage
+  run: pytest --cov=guardrails --cov=core --cov-report=xml
+
+- name: Upload coverage to Codecov
+  uses: codecov/codecov-action@v3
+  with:
+    files: ./coverage.xml
+```
+
+**Why this matters:** Guardrails (input_guard.py, output_guard.py) must have zero uncovered branches to ensure all security checks are tested.
+
+### 2. Security Scanning with Bandit (Lightweight Pre-commit)
+
+Add Python security scanning before commit:
+
+```bash
+# Install Bandit
+pip install bandit
+
+# Scan project
+bandit -r guardrails/ core/ api/ tools/ -f json -o bandit-report.json
+
+# Fail on medium+ severity
+bandit -r . -ll  # -ll = medium level and above
+```
+
+Pre-commit hook (`.pre-commit-config.yaml`):
+```yaml
+- repo: https://github.com/PyCQA/bandit
+  rev: 1.7.5
+  hooks:
+    - id: bandit
+      args: ['-ll']  # Medium severity minimum
+      exclude: tests/
+```
+
+**Focus areas:** Detect hardcoded secrets, SQL injection patterns, insecure random usage in guardrails and auth modules.
+
+### 3. Dependency Vulnerability Scanning
+
+Quick setup with pip-audit (Python-specific):
+
+```bash
+# Install pip-audit
+pip install pip-audit
+
+# Check dependencies
+pip-audit --desc  # Show vulnerability descriptions
+
+# In CI, fail on high-severity
+pip-audit --fail-on high
+```
+
+GitHub Actions integration:
+```yaml
+- name: Check dependencies for vulnerabilities
+  run: pip-audit --fail-on high
+```
+
+**Critical dependencies to monitor:**
+- fastapi (API framework)
+- cryptography (JWT/RBAC)
+- javalang (Java parsing)
+- pydantic (data validation)
+
+### 4. Static Code Quality with SonarQube (Optional, Enterprise)
+
+For organizations with SonarQube instance:
+
+```bash
+# Install SonarScanner
+pip install sonarscan
+
+# Run analysis (requires sonar.projectKey, sonar.host.url, sonar.login)
+sonar-scanner \
+  -Dsonar.projectKey=java-to-python \
+  -Dsonar.host.url=https://sonarqube.company.com \
+  -Dsonar.login=$SONAR_TOKEN
+```
+
+Quality gate conditions:
+- Coverage > 80%
+- Duplicated lines < 5%
+- Code smells < 10
+- No critical issues
+
+### 5. Mutation Testing with Stryker (Test Validation)
+
+Verify that tests catch real bugs by mutating code:
+
+```bash
+# Install Stryker for Python
+pip install mutmut
+
+# Run mutation tests on guardrails
+mutmut run --paths-to-mutate=guardrails
+
+# Generate HTML report
+mutmut html
+```
+
+Example: Test that `input_guard.py` rejection logic is properly tested:
+```bash
+mutmut run --paths-to-mutate=guardrails/input_guard.py \
+  --tests-dir=tests/adversarial
+```
+
+**Success criteria:** > 80% mutation score (tests kill > 80% of mutants)
+
+### 6. Compliance Reporting & Traceability (Regulated Environments)
+
+For organizations requiring formal verification:
+
+**Current state** (README-based):
+```
+README.md
+├── Requirements section
+├── Test suite breakdown
+├── Unit/Integration/Correctness/Negative/Adversarial breakdown
+└── Maps to test files
+```
+
+**Migrate to** (TestRail example):
+1. Create test plan in TestRail
+2. Link each test case to requirement ID
+3. Run tests via API
+4. Auto-generate compliance report
+
+```python
+# Example: Link test to requirement
+# TestRail API: Create test case run with requirement traceability
+POST /api/v2/add_result_for_case/1/123
+{
+    "status_id": 1,  # passed
+    "comment": "Verifies Req-002: Dependency ordering",
+    "custom_requirement_id": "REQ-002"
+}
+```
+
+### 7. CI/CD Pipeline with All Tools (Complete Setup)
+
+Recommended GitHub Actions workflow:
+
+```yaml
+name: End-to-End Quality & Security
+
+on: [push, pull_request]
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      # Linting & style
+      - name: Lint with Pylint
+        run: |
+          pip install pylint
+          pylint guardrails/ core/ api/ tools/ --fail-under=9.0
+      
+      # Security scanning
+      - name: Bandit security scan
+        run: |
+          pip install bandit
+          bandit -r . -ll --exclude tests/
+      
+      # Dependency audit
+      - name: Check dependencies
+        run: |
+          pip install pip-audit
+          pip-audit --fail-on high
+      
+      # Test execution
+      - name: Run tests
+        run: pytest --cov=guardrails --cov=core --cov-report=xml
+      
+      # Coverage upload
+      - name: Upload coverage
+        uses: codecov/codecov-action@v3
+      
+      # Mutation testing (optional, slower)
+      - name: Mutation test guardrails
+        run: |
+          pip install mutmut
+          mutmut run --paths-to-mutate=guardrails --tests-dir=tests
+      
+      # Quality gate (SonarQube)
+      - name: SonarQube analysis
+        if: env.SONAR_HOST_URL != ''
+        run: |
+          pip install sonarscan
+          sonar-scanner -Dsonar.host.url=${{ secrets.SONAR_HOST_URL }} \
+                       -Dsonar.login=${{ secrets.SONAR_TOKEN }}
+```
+
+### Requirements-to-Implementation Mapping
+
+| Requirement (README) | Test (pytest) | Security Check | Quality Gate | Coverage |
+|---|---|---|---|---|
+| "Guarantee base-before-subclass order" | test_topological_sort.py (16 tests) | Klocwork scan | SonarQube: no high issues | 95%+ on project_translator.py |
+| "Detect circular dependencies" | test_circular_dependencies.py (4 tests) | Bandit: no unsafe loops | No tech debt on Kahn logic | 100% cycle path |
+| "Block injection patterns" | test_prompt_injection.py (5 tests) | Klocwork CWE-89, CWE-95 | SonarQube security hotspots | 100% on input_guard patterns |
+| "Redact secrets from output" | test_forbidden_patterns.py (4 tests) | Bandit hardcoding check | No credential leak in logs | 100% on output_guard.redact() |
+| "Enforce RBAC via JWT" | test_rbac_enforcement.py (4 tests) | Checkmarx token validation | Crypto best practices | 100% on auth.py verify_token |
+| "Policy lock for models/egress" | test_model_blocking.py (3 tests) | Klocwork: whitelist bypass | No bypass paths | 100% on provider_lock.py |
+
+This table is the **top-to-bottom traceability matrix:** each requirement has a test, security validation, and quality gate.
+
+<p align="right">(<a href="#top">back to top</a>)</p>
+
 
 ```mermaid
 pie title Test File Distribution by Marker Group
