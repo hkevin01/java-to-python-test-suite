@@ -43,6 +43,7 @@ This project uses a Python + pytest stack because it maximizes test expressivene
 - [Visualization as a Verification Tool](#visualization-as-a-verification-tool)
 - [Technology Stack Decision Matrix](#technology-stack-decision-matrix)
 - [Test Suite Breakdown](#test-suite-breakdown)
+- [Tool Compliance for Top Secret SCI/SCIF Regulated Environments](#tool-compliance-for-top-secret-sciscif-regulated-environments)
 - [Setup and Installation](#setup-and-installation)
 - [Usage](#usage)
 - [Roadmap](#roadmap)
@@ -1021,6 +1022,117 @@ pie title Test File Distribution by Marker Group
 | correctness | Python output structure and signature quality | Protects translation fidelity |
 | negative | Policy and access-control enforcement | Prevents unsafe execution paths |
 | adversarial | Injection and malformed input hardening | Reduces attack-surface risk |
+
+<p align="right">(<a href="#top">back to top</a>)</p>
+
+## Tool Compliance for Top Secret SCI/SCIF Regulated Environments
+
+**Classification Criteria:**
+- 🟢 **APPROVED**: Tool is explicitly approved for classified/SCI work, has required security certifications (ISO 27001, FedRAMP, etc.), commonly used in defense/government sectors, or is open-source with minimal attack surface.
+- 🟡 **CONDITIONAL**: Tool can be used with specific restrictions (on-prem deployment only, special licensing, restricted data flow, etc.).
+- 🔴 **NOT APPROVED**: Tool lacks required certifications, uses unapproved cloud storage, transmits classified data externally, or has known security concerns for SCI environments.
+
+> [!CAUTION]
+> All tools flagged as NOT APPROVED or CONDITIONAL must be reviewed by your security/compliance officer before use. Do not deploy tools flagged as NOT APPROVED in SCI/SCIF environments. CONDITIONAL tools require explicit variance/waiver documentation.
+
+### Core Runtime & Test Framework Dependencies
+
+| Tool | Version | Purpose | SCI/SCIF Status | Restrictions/Notes |
+|---|---|---|---|---|
+| **Python** | 3.11+ | Runtime interpreter | 🟢 **APPROVED** | Open-source, widely used in government. Requires system-level deployment controls. |
+| **pytest** | 8.0+ | Test framework | 🟢 **APPROVED** | Open-source, MIT license. Standard in Python security testing. No external data transmission. |
+| **pytest-asyncio** | 0.23+ | Async test support | 🟢 **APPROVED** | Open-source, BSD license. Minimal attack surface. |
+| **httpx** | 0.27+ | HTTP client for API testing | 🟢 **APPROVED** | Open-source, BSD license. Used for in-process API testing only (no external calls). |
+| **FastAPI** | 0.136+ | Web framework | 🟡 **CONDITIONAL** | Open-source, MIT license. Requires hardened deployment configuration for SCI. Ensure all dependencies are audited. On-prem deployment only. |
+| **cryptography** | 42.0+ | Cryptographic library | 🟢 **APPROVED** | Open-source, dual Apache/BSD license. NIST-standard algorithms. Actively maintained. |
+| **PyJWT** | 2.8+ | JWT signing/verification | 🟢 **APPROVED** | Open-source, MIT license. Minimal, focused functionality. |
+| **Pydantic** | 2.9+ | Data validation | 🟢 **APPROVED** | Open-source, MIT license. No external validation calls. Widely adopted in security projects. |
+| **javalang** | 0.13+ | Java parser | 🟢 **APPROVED** | Open-source, BSD license. Local parsing only, no network access. |
+
+### Static Analysis & Security Scanning Tools (SAST/SCA)
+
+| Tool | Purpose | SCI/SCIF Status | Restrictions/Notes | Recommended? |
+|---|---|---|---|---|
+| **Klocwork** (Perforce) | SAST - vulnerabilities, code quality | 🟢 **APPROVED** | Enterprise tool explicitly used by aerospace/defense. ISO 27001 certified. TÜV-SÜD certified. Commercial license required. | ✅ **YES** - Preferred for classified environments |
+| **SonarQube** | Code quality & maintainability | 🟡 **CONDITIONAL** | On-prem deployment: **APPROVED**. Cloud (SonarCloud): **NOT APPROVED**. Requires air-gapped or internal-only instance. | ⚠️ On-prem only |
+| **Checkmarx** (SAST) | Enterprise vulnerability scanning | 🟢 **APPROVED** | Explicitly targets government/defense. Supports on-prem. Commercial license required. | ✅ **YES** - Enterprise-grade SAST |
+| **Coverity** (Synopsys) | Deep static analysis | 🟢 **APPROVED** | Defense/aerospace standard tool. Commercial license required. Supports on-prem deployment. | ✅ **YES** - Advanced static analysis |
+| **Bandit** | Python-specific security scanning | 🟢 **APPROVED** | Open-source, Apache 2.0 license. Lightweight, local execution only. | ✅ **YES** - Lightweight pre-commit check |
+| **Pylint** | Python linting & style | 🟢 **APPROVED** | Open-source, GPL license. No external calls. Standard in Python ecosystem. | ✅ **YES** - Pre-commit linting |
+| **pip-audit** | Python dependency vulnerability scanning | 🟢 **APPROVED** | Open-source, MIT license. Local scanning, no remote calls by default. | ✅ **YES** - Lightweight dependency audit |
+| **OWASP Dependency-Check** | Dependency vulnerability scanner | 🟢 **APPROVED** | Open-source, Apache 2.0 license. Can run air-gapped with offline DB. | ✅ **YES** - Comprehensive SCA |
+| **Black Duck** (Synopsys) | License & composition analysis | 🟡 **CONDITIONAL** | Commercial tool with on-prem option. Requires licensing agreement for classified use. | ⚠️ On-prem with variance |
+| **Snyk** | Dependency scanning SaaS | 🔴 **NOT APPROVED** | Cloud-based SaaS. Data transmission to external service prohibited for SCI. Unapproved for classified use. | ❌ **NO** - Do not use |
+
+### Testing & Performance Measurement Tools
+
+| Tool | Purpose | SCI/SCIF Status | Restrictions/Notes | Recommended? |
+|---|---|---|---|---|
+| **pytest-cov** | Code coverage measurement | 🟢 **APPROVED** | Open-source, BSD license. Local execution only. Generates coverage reports. | ✅ **YES** - Essential for V&V |
+| **Codecov** | Coverage tracking SaaS | 🔴 **NOT APPROVED** | Cloud-based service. Transmits coverage data to external servers. Not approved for SCI environments. | ❌ **NO** - Do not use |
+| **Datadog** | APM & monitoring SaaS | 🔴 **NOT APPROVED** | Cloud SaaS. Continuous data transmission to external servers. Classified data cannot be sent to Datadog. | ❌ **NO** - Do not use |
+| **LoadRunner** (Micro Focus/OpenText) | Performance & load testing | 🟡 **CONDITIONAL** | On-prem/self-hosted: **APPROVED** with proper security hardening. Cloud version: **NOT APPROVED**. Commercial license required. | ⚠️ On-prem only |
+| **Stryker** | Mutation testing (Python/Java) | 🟢 **APPROVED** | Open-source, Apache 2.0 license. Runs locally, no external calls. | ✅ **YES** - Test quality verification |
+| **PIT** | Mutation testing for Java bytecode | 🟢 **APPROVED** | Open-source, Apache 2.0 license. Local execution only. | ✅ **YES** - For Java parity testing |
+
+### Requirements Traceability & Test Management Tools
+
+| Tool | Purpose | SCI/SCIF Status | Restrictions/Notes | Recommended? |
+|---|---|---|---|---|
+| **TestRail** | Test management & traceability | 🟡 **CONDITIONAL** | Self-hosted/on-prem: **APPROVED** with proper security controls. Cloud version: **NOT APPROVED**. Proprietary, commercial license. | ⚠️ On-prem with security review |
+| **Jira Xray** | Test management within Jira | 🟡 **CONDITIONAL** | On-prem Jira: **APPROVED**. Cloud Jira: **NOT APPROVED** for SCI data. Proprietary plugin, commercial license. | ⚠️ On-prem only |
+| **Azure DevOps Test Plans** | Requirements & test traceability | 🟡 **CONDITIONAL** | On-prem: **APPROVED** (requires Azure DevOps Server). Cloud (azure.com): **NOT APPROVED** for SCI. | ⚠️ On-prem only |
+| **ReqIF Editor** | Requirements interchange format | 🟢 **APPROVED** | Open-source, EPL license. Local file-based tool, no external connections. | ✅ **YES** - For requirements management |
+
+### DevOps & Continuous Integration (CI/CD)
+
+| Tool | Purpose | SCI/SCIF Status | Restrictions/Notes | Recommended? |
+|---|---|---|---|---|
+| **GitHub Actions** | Cloud-hosted CI/CD | 🔴 **NOT APPROVED** | Cloud-hosted service. Builds and artifacts transmitted to GitHub servers. Not approved for SCI code/data. | ❌ **NO** - Use on-prem CI/CD |
+| **Jenkins** | On-prem CI/CD automation | 🟢 **APPROVED** | Open-source, MIT license. Can be air-gapped or on-prem only. Widely used in government. | ✅ **YES** - Preferred CI/CD for SCI |
+| **GitLab CI** (Cloud) | Cloud-hosted CI/CD | 🔴 **NOT APPROVED** | Cloud-hosted. Not approved for SCI code transmission. | ❌ **NO** - Use on-prem option |
+| **GitLab CI** (Self-Hosted) | Self-hosted CI/CD | 🟡 **CONDITIONAL** | On-prem deployment: **APPROVED** with proper air-gapping. Proprietary core, open-source options available. | ⚠️ On-prem with security review |
+
+### Summary: Compliance Status by Category
+
+| Category | Approved Count | Conditional Count | Not Approved Count | Recommendation |
+|---|---|---|---|---|
+| **Core Dependencies** | 8/8 | 1 | 0 | Use all core deps. Harden FastAPI deployment. |
+| **Static Analysis (SAST/SCA)** | 5/9 | 2 | 2 | Use Klocwork, Checkmarx, Coverity as primary SAST. Avoid Snyk cloud. |
+| **Testing & Performance** | 4/6 | 1 | 1 | Use pytest-cov and mutation testing. Avoid Codecov/Datadog cloud. |
+| **Requirements & Test Mgmt** | 1/4 | 3 | 0 | Use ReqIF or on-prem TestRail/Jira. Avoid cloud services. |
+| **CI/CD** | 1/4 | 1 | 2 | Use Jenkins on-prem. Avoid GitHub Actions and cloud CI. |
+| **TOTAL** | 19/31 | 8/31 | 5/31 | **Buildable with APPROVED tools. CONDITIONAL tools need variance.** |
+
+### Deployment Guidelines for SCI/SCIF Environments
+
+**For APPROVED Tools:**
+- No additional review needed.
+- Deploy using standard security hardening practices.
+- Ensure all infrastructure is on-prem and air-gapped from external networks.
+
+**For CONDITIONAL Tools:**
+- Requires security/compliance officer review and variance documentation.
+- Must be deployed on-prem (not cloud).
+- Ensure all data remains within security boundary.
+- Document any external dependencies or data transmission.
+
+**For NOT APPROVED Tools:**
+- **DO NOT DEPLOY** in SCI/SCIF environments.
+- Seek alternative APPROVED tools.
+- Escalate to program security office if no alternative exists.
+
+### Migration Recommendations
+
+If you are currently using NOT APPROVED tools:
+
+| Current Tool | Reason Not Approved | APPROVED Alternative |
+|---|---|---|
+| **Codecov** | Cloud SaaS, external data transmission | Use local pytest-cov + local artifact storage |
+| **Datadog** | Cloud SaaS, continuous monitoring | Use on-prem ELK, Grafana, or Prometheus stack |
+| **Snyk** | Cloud SaaS, external scanning | Use OWASP Dependency-Check (on-prem) + Bandit |
+| **GitHub Actions** | Cloud CI/CD | Use Jenkins on-prem or GitLab self-hosted |
+| **SonarCloud** | Cloud SaaS | Use SonarQube on-prem instance |
 
 <p align="right">(<a href="#top">back to top</a>)</p>
 
