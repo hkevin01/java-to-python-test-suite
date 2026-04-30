@@ -911,95 +911,106 @@ This section catalogs established computer science and mathematical algorithms t
 
 ### Graph Theory and Dependency Analysis Algorithms
 
-| Algorithm | Origin / Field | What It Does | Application to This Project | Complexity | Status |
+<small>
+
+| Algorithm | What It Is | Most Common Use | Why It Should Be Used | How It Helps This Project | When Not To Use |
 |---|---|---|---|---|---|
-| **Kahn's Algorithm** | Graph Theory (1962) | Topological ordering of a DAG by repeatedly removing nodes with in-degree 0 | Determines Java class translation order — base before subclass | O(V+E) | ✅ Implemented |
-| **Tarjan's SCC** | Graph Theory (1972) | Finds all strongly connected components in O(V+E) using DFS + lowlink values | Detects all mutually dependent class cycles in a Java project dependency graph; richer cycle reporting than Kahn alone | O(V+E) | 🟡 Applicable — replace/augment cycle fallback |
-| **Kosaraju's SCC** | Graph Theory (1978) | Two-pass DFS for strongly connected components | Alternative to Tarjan for cycle grouping; reverse graph pass provides natural SCC ordering | O(V+E) | 🟡 Applicable — alternative to Tarjan |
-| **DFS / BFS Traversal** | Graph Theory | Systematic graph exploration (depth-first or breadth-first) | DFS is the foundation of dependency graph traversal; BFS can identify parallel translation batches (classes at the same level) | O(V+E) | ✅ Implicit in graph module |
-| **Dijkstra's Shortest Path** | Graph Theory (1956) | Finds minimum-cost path in a weighted graph | Could compute critical translation path (longest dependency chain) to predict minimum parallel build time | O((V+E) log V) | 🟡 Applicable — critical path planning |
-| **Floyd-Warshall** | Dynamic Programming (1962) | All-pairs shortest paths in a weighted graph | Computes transitive closure of dependency graph — identifies which classes indirectly depend on which | O(V³) | 🟡 Applicable — full transitive impact analysis |
-| **Union-Find (Disjoint Set)** | Data Structures | Tracks connected components with near-O(1) union and find | Efficient incremental cycle detection as new dependency edges are added to the graph | O(α(V)) | 🟡 Applicable — incremental dependency builder |
+| Kahn's (implemented) | In-degree based topological sort for DAGs | Build order resolution, dependency scheduling | Deterministic ordering and clear cycle detection when no zero in-degree node remains | Already used to order Java classes before translation so base classes are processed before dependents | Not for weighted path problems or graphs that are not DAG-like |
+| Tarjan's SCC | One-pass DFS algorithm that finds all strongly connected components | Cycle grouping in directed graphs, compilers, package analyzers | Linear-time cycle group discovery and reverse-topological SCC output | Can report all dependency cycles at once with grouped diagnostics for project translation failures | Not needed for tiny graphs where simple cycle-exists checks are enough |
+| Kosaraju's SCC | Two-pass DFS SCC algorithm over graph and reversed graph | SCC extraction when implementation simplicity is preferred | Easy to reason about and verify for correctness | Alternate SCC implementation for cross-validating cycle group results from Tarjan | Less ideal when memory access to reverse graph is costly or graph is streaming |
+| DFS/BFS | Fundamental graph traversals for depth or level exploration | Reachability, component discovery, shortest unweighted paths (BFS) | Foundational and fast, useful in almost every graph pipeline | DFS supports dependency walk and cycle heuristics; BFS can identify translation batches by level | Not enough alone when you need weighted optimization, SCC grouping, or formal ordering guarantees |
+| Dijkstra | Shortest-path algorithm for non-negative weighted graphs | Routing, minimum cost path, critical path scoring | Finds best path under weighted constraints efficiently | Can prioritize translation sequence by cost/risk weights (complexity, blast radius, module criticality) | Not for negative edge weights, where Bellman-Ford style methods are required |
+| Floyd-Warshall | Dynamic programming for all-pairs shortest paths | Dense graph all-pairs analysis, transitive reachability | Gives full matrix visibility into every pair relationship | Useful for full dependency impact maps and change blast-radius analysis | Avoid on large sparse graphs due to cubic cost |
+| Union-Find | Disjoint-set structure with union/find operations | Connectivity checks, incremental grouping, Kruskal-like workflows | Very fast near constant-time merges and membership checks | Can speed incremental dependency ingestion and fast connectivity sanity checks before deeper analysis | Not suitable for directed SCC semantics or ordered traversal outputs |
 
-### Code Analysis and Transformation Algorithms
+</small>
 
-| Algorithm | Origin / Field | What It Does | Application to This Project | Complexity | Status |
+### Code Analysis and Transformation
+
+<small>
+
+| Algorithm | What It Is | Most Common Use | Why It Should Be Used | How It Helps This Project | When Not To Use |
 |---|---|---|---|---|---|
-| **AST Traversal (Visitor Pattern)** | Compiler Theory | Walks an Abstract Syntax Tree node-by-node to extract or transform structure | `javalang` uses recursive AST traversal to extract Java class names, imports, and method signatures | O(N) — N = AST nodes | ✅ Implemented (via javalang) |
-| **Tree Edit Distance (Zhang-Shasha)** | CS/NLP (1989) | Minimum edit operations to transform one tree into another | Measures structural difference between Java AST and translated Python AST — proves migration fidelity at the tree level | O(N² M²) | 🟡 Applicable — deep parity validation |
-| **Control-Flow Graph (CFG) Analysis** | Compiler Theory (Allen 1970) | Builds a directed graph of basic blocks and control flow edges | Identifies unreachable Java code paths before translation and validates translated Python control-flow equivalence | O(N) | 🟡 Applicable — completeness verification |
-| **Data-Flow Analysis** | Compiler Theory | Tracks variable types, values, and definitions through code using lattice propagation | Verifies that type-mapped Java variables flow correctly into translated Python counterparts | O(N×D) — D = lattice depth | 🟡 Applicable — type mapping verification |
-| **Program Slicing** | Program Analysis (Weiser 1984) | Extracts the minimal code subset that affects a specific variable or output | Isolates only the Java code relevant to a specific translation target, reducing noise in guardrail pattern checks | O(N²) | 🟡 Applicable — targeted translation scope |
-| **Taint Analysis (Data-flow variant)** | Security / Compiler Theory | Labels untrusted inputs and tracks their propagation through code | Tracks untrusted API inputs through the translation pipeline — foundation for guardrail `input_guard.py` logic | O(N) | ✅ Conceptually implemented in guardrails |
-| **Type Inference (Hindley-Milner)** | Type Theory (1978) | Infers types without explicit annotations using unification | Could infer Python types automatically from Java-typed sources during translation | O(N log N) | 🟡 Applicable — auto type annotation in translated Python |
-| **Abstract Interpretation** | Formal Methods (Cousot 1977) | Over-approximates program semantics mathematically without executing code | Statically proves that translated Python cannot exhibit certain runtime behaviors (e.g., null pointer equivalents) | Varies | 🟡 Applicable — formal safety proofs |
+| AST Traversal (implemented) | Tree walk over parsed syntax nodes | Compilers, linters, refactoring, static analyzers | Preserves structural meaning better than regex parsing | Already powers Java structure extraction for classes/imports/method signatures | Not for runtime behavior reasoning without control/data flow context |
+| Tree Edit Distance (Zhang-Shasha) | Minimum edit cost between two trees | AST diffing, clone analysis, migration similarity checks | Captures structural differences not visible in plain text diff | Can score Java vs translated Python AST fidelity for stronger parity evidence | Avoid for very large trees in hot paths due to higher compute cost |
+| CFG | Graph model of possible execution paths in a function/method | Dead code detection, path analysis, coverage planning | Exposes branch structure and reachability explicitly | Can verify translated Python keeps equivalent branch reachability vs Java | Not needed for simple straight-line code with no branching |
+| Data-Flow Analysis | Tracks definitions, uses, and propagation of values/types | Compiler optimization, bug finding, security checks | Detects misuse and propagation mistakes early | Can validate Java type/variable semantics survive mapping into Python | Avoid when analysis precision cost exceeds value for trivial modules |
+| Program Slicing | Extracts statements relevant to a variable/output criterion | Debugging, comprehension, targeted verification | Reduces analysis scope and noise | Isolates only code affecting a translated output to speed parity root-cause analysis | Not ideal when holistic system interactions are the real issue |
+| Taint Analysis (implemented conceptually) | Marks untrusted input and tracks flow to sensitive sinks | Security validation, injection prevention | Directly maps to security risk pathways | Supports guardrail hardening by tracing untrusted request data through translation pipeline | Not useful when all inputs are already trusted and isolated |
+| Hindley-Milner Type Inference | Unification-based static type inference | Functional languages, inferred typing systems | Improves correctness with less manual annotation | Could auto-suggest Python type hints from Java source semantics | Not a fit where dynamic/runtime types dominate behavior |
+| Abstract Interpretation | Sound approximation of program states over abstract domains | Static verification and bug class elimination | Can prove classes of errors without executing code | Can add formal assurance on translated output safety properties | Avoid where exact concrete behavior is mandatory and approximation is too coarse |
 
-### Pattern Matching and Security Algorithms
+</small>
 
-| Algorithm | Origin / Field | What It Does | Application to This Project | Complexity | Status |
+### Pattern Matching and Security
+
+<small>
+
+| Algorithm | What It Is | Most Common Use | Why It Should Be Used | How It Helps This Project | When Not To Use |
 |---|---|---|---|---|---|
-| **Aho-Corasick** | String Algorithms (1975) | Multi-pattern simultaneous string matching using a finite-state automaton built from a trie | Replace multiple sequential regex scans in `input_guard.py` with a single O(N+M+Z) pass over all injection/secret patterns | O(N+M+Z) | 🟡 High-value upgrade for guardrails |
-| **Rabin-Karp Rolling Hash** | String Algorithms (1987) | Uses rolling hashes to find pattern matches in a text stream | Efficiently detect duplicate code blocks across translated files — identify Java clone patterns before and after translation | O(N+M) avg | 🟡 Applicable — code clone detection |
-| **Boyer-Moore String Search** | String Algorithms (1977) | Fast single-pattern search using bad-character and good-suffix rules | Faster pattern scanning for known bad signatures in individual source files during security guardrail pre-check | O(N/M) avg | 🟡 Applicable — fast single-pattern guardrail |
-| **Bloom Filter** | Probabilistic Data Structures (Burton 1970) | Probabilistic set membership test with zero false negatives | Fast pre-screen of input strings against known injection/secret patterns before full regex evaluation | O(k) per query | 🟡 Applicable — guardrail fast-path |
-| **Levenshtein Distance** | String Metrics (1965) | Minimum single-character edit operations between two strings | Measures lexical similarity between Java source and translated Python — flags suspiciously divergent translations | O(N×M) | 🟡 Applicable — translation similarity scoring |
+| Aho-Corasick | Trie + failure-link automaton for multi-pattern search | IDS signatures, malware scanning, keyword dictionaries | Finds all patterns in one pass efficiently | Can replace sequential guardrail regex checks with one multi-pattern scanner for injection/secrets | Not ideal for complex contextual patterns better handled by full parsers or regex engines |
+| Rabin-Karp | Rolling-hash string matching approach | Plagiarism/clone detection, multiple substring checks | Fast average matching and convenient window hashing | Can detect repeated risky snippets or clone patterns across translated outputs | Avoid when hash collision handling overhead or exact single-pattern speed is critical |
+| Boyer-Moore | Heuristic skip-based exact pattern matcher | Fast exact search in large text | Often sublinear average performance for single pattern | Useful for fast scanning of one high-priority forbidden token/signature | Not for many patterns at once; Aho-Corasick is better there |
+| Bloom Filter | Probabilistic membership structure with false positives only | Caching, prefiltering, dedupe prechecks | Very memory-efficient and fast precheck stage | Can fast-reject obviously safe payloads before expensive deep scans | Not for workflows requiring zero false positives and exact membership |
+| Levenshtein Distance | Edit-distance metric between strings | Fuzzy matching, near-duplicate detection, typo tolerance | Quantifies similarity robustly | Can score translation drift and flag suspiciously divergent output from expected behavior/text | Avoid for strict semantic equivalence judgments without structural context |
 
-### Formal Verification and Correctness Algorithms
+</small>
 
-| Algorithm | Origin / Field | What It Does | Application to This Project | Complexity | Status |
+### Formal Verification and Correctness
+
+<small>
+
+| Algorithm | What It Is | Most Common Use | Why It Should Be Used | How It Helps This Project | When Not To Use |
 |---|---|---|---|---|---|
-| **Model Checking (CTL/LTL)** | Formal Verification (Clarke 1981) | Exhaustively checks whether a finite-state model satisfies a temporal logic specification | Verifies that RBAC state machine always reaches deny before reaching execute for unauthorized roles | Exponential in states | 🟡 Applicable — auth policy model checking |
-| **Symbolic Execution** | Program Analysis (King 1976) | Explores code paths using symbolic values instead of concrete inputs, generating path conditions | Generates test inputs that cover all guardrail branches — finds injection bypasses that concrete tests miss | Exponential paths | 🟡 Applicable — automated test generation |
-| **Concolic Testing (DART/SAGE)** | Program Analysis (Godefroid 2005) | Combines concrete execution and symbolic reasoning to guide test generation | Produces new API request inputs that cover untested translation logic paths automatically | Polynomial per iteration | 🟡 Applicable — test completeness improvement |
-| **Hoare Logic (Pre/Post Conditions)** | Formal Verification (Hoare 1969) | Proves program correctness using {P} C {Q} triples (precondition, command, postcondition) | Formally specifies and verifies that `topological_sort()` always outputs dependency-first order given a valid DAG | Varies | 🟡 Applicable — contract-based verification |
-| **Property-Based Testing (QuickCheck)** | Randomized Testing (1999) | Automatically generates random inputs to test stated invariant properties | Generates thousands of random Java class graphs to verify that Kahn sort always satisfies index(B) < index(A) for all edges | O(N×trials) | 🟡 Applicable — invariant verification at scale |
+| Model Checking | Exhaustive state-space verification against temporal properties | Protocol verification, safety-critical policy checks | Finds counterexamples rigorously | Can prove RBAC and policy-lock invariants over request state transitions | Avoid for very large unconstrained state spaces without abstraction |
+| Symbolic Execution | Executes paths with symbolic values and constraints | Path discovery, bug finding, test generation | Reaches edge paths hard to hit with manual tests | Can generate adversarial API vectors to stress translation and guardrails | Not ideal when path explosion makes runtime impractical |
+| Concolic Testing | Concrete execution guided by symbolic constraints | Automated test input generation | Practical compromise between full symbolic and random testing | Can expand coverage for translation endpoints with targeted boundary/path inputs | Avoid when harness constraints are too expensive to maintain |
+| Hoare Logic | Pre/postcondition proof framework for program correctness | Formal specs and proof-oriented correctness | Sharp contractual reasoning around invariants | Can specify and verify required behavior for dependency ordering and policy checks | Not needed where lightweight testing already provides enough assurance |
+| Property-Based Testing | Randomized input generation checked against invariants | Invariant testing and edge-case exploration | Finds surprising cases that example-based tests miss | Can stress graph ordering and parity invariants over large random input spaces | Avoid when properties are weakly defined or nondeterministic outputs are expected |
 
-### Software Metrics Algorithms
+</small>
 
-| Algorithm | Origin / Field | What It Does | Application to This Project | Output Metric | Status |
+### Software Metrics
+
+<small>
+
+| Algorithm | What It Is | Most Common Use | Why It Should Be Used | How It Helps This Project | When Not To Use |
 |---|---|---|---|---|---|
-| **McCabe's Cyclomatic Complexity** | Software Metrics (1976) | Counts independent paths through code using CFG: M = E − N + 2P | Measures complexity of Java source before translation; high complexity classes require more test vectors in parity suite | Complexity number (ideally ≤ 10) | 🟡 Applicable — translation difficulty scoring |
-| **Halstead Metrics** | Software Metrics (1977) | Derives volume, difficulty, and effort from operator/operand counts | Computes code volume before and after translation; ensures Python output is not significantly more complex than Java input | Volume, Difficulty, Effort | 🟡 Applicable — translation quality gate |
-| **Maintainability Index** | Software Metrics (Coleman 1994) | Composite metric from Halstead Volume + Cyclomatic Complexity + LOC | Scores maintainability of translated Python files; flags files below threshold for manual review | 0–100 score | 🟡 Applicable — automated code quality scoring |
-| **Fan-In / Fan-Out Analysis** | Software Metrics | Counts how many modules call a class (fan-in) and how many it calls (fan-out) | Identifies Java hub classes with high fan-in that must be translated before dependents; improves Kahn ordering decisions | Fan-in/out counts | 🟡 Applicable — dependency risk profiling |
+| McCabe Cyclomatic Complexity | Branch/path complexity metric from control flow | Test planning and maintainability risk scoring | Correlates complexity with defect and testing effort | Can drive risk-based test intensity on translated functions/classes | Not as a sole quality signal without context |
+| Halstead Metrics | Operator/operand based software volume and effort metrics | Productivity and maintainability analysis | Gives a language-agnostic complexity lens | Can compare source vs translated code inflation and detect complexity bloat | Avoid as hard pass/fail gates in isolation |
+| Maintainability Index | Composite maintainability score from complexity/volume/LOC | Portfolio-level code health tracking | Easy high-level signal for triage | Can prioritize translated files for manual review when score degrades | Not reliable for very small files or generated code alone |
+| Fan-In/Fan-Out | Counts inbound and outbound dependency edges | Architecture coupling analysis | Highlights hotspots and blast-radius risk | Can prioritize high fan-in classes for stricter parity and regression checks | Not needed for tiny low-coupling modules |
 
-### Audit Trail and Statistical Process Control Algorithms
+</small>
 
-| Algorithm | Origin / Field | What It Does | Application to This Project | Output Signal | Status |
+### Audit and Statistical Process Control
+
+<small>
+
+| Algorithm | What It Is | Most Common Use | Why It Should Be Used | How It Helps This Project | When Not To Use |
 |---|---|---|---|---|---|
-| **Shewhart Control Charts (X-bar, R)** | Statistical Process Control (1924) | Tracks process metrics over time and signals when values exceed ±3σ control limits | Monitors API latency over time in audit records — triggers alert when latency drifts outside control limits | In-control / Warning / Breach | ✅ Implemented (control_state in audit) |
-| **CUSUM (Cumulative Sum)** | Statistical Process Control (Page 1954) | Accumulates deviations from target to detect small persistent drift that Shewhart misses | Detects gradual latency degradation across releases even when no single request exceeds SLA | CUSUM score + alert threshold | 🟡 Applicable — drift detection in audit dashboard |
-| **EWMA (Exponentially Weighted Moving Average)** | Statistical Process Control | Weights recent observations more heavily than older ones for smooth trend detection | Computes a smoothed latency trend in the audit dashboard more responsive than a simple rolling average | EWMA value + trend slope | 🟡 Applicable — audit dashboard trend signals |
-| **Z-Score Anomaly Detection** | Statistics | Flags observations more than N standard deviations from the mean | Flags individual audit records with anomalous latency or DPMO as outliers for investigation | Z-score ≥ 3.0 = anomaly | 🟡 Applicable — audit record anomaly flagging |
-| **Isolation Forest** | Machine Learning (Liu 2008) | Isolates anomalies in multivariate data by recursively partitioning with random splits | Detects unusual combinations of (latency, DPMO, role, action) in audit records that no single metric would catch | Anomaly score 0–1 | 🟡 Applicable — multivariate audit anomaly detection |
-| **Bayesian Inference** | Statistics (Bayes 1763) | Updates probability of a hypothesis given new evidence: P(H|E) = P(E|H)×P(H) / P(E) | Estimates failure probability of a new release given historical defect rates and current test results | Posterior failure probability | 🟡 Applicable — release risk scoring |
-| **Fisher's Exact Test** | Statistics (Fisher 1922) | Tests independence in a 2×2 contingency table with small sample sizes | Determines whether a spike in blocked requests is statistically significant or due to random variation | p-value ≤ 0.05 = significant | 🟡 Applicable — blocked-request spike detection |
+| Shewhart Control Charts (implemented baseline) | Control limits over time-series process metrics | Manufacturing and ops stability monitoring | Fast detection of obvious out-of-control behavior | Already aligns to audit control-state tracking for latency/quality drift | Less sensitive to small gradual drifts |
+| CUSUM | Cumulative drift detector versus target mean | Early shift detection in process monitoring | Detects subtle persistent changes earlier than Shewhart | Can alert on slow latency degradation before SLA breach | Not for highly non-stationary streams without segmentation |
+| EWMA | Exponentially weighted moving average trend estimator | Smoothed monitoring and anomaly trend tracking | Balances noise reduction with responsiveness | Can provide cleaner quality/latency trendlines in audit dashboards | Avoid if abrupt shifts are the only concern and lag is unacceptable |
+| Z-Score Anomaly Detection | Standard deviation based outlier scoring | Basic anomaly and quality outlier flags | Simple, interpretable, low implementation cost | Can flag suspicious request records for investigation in near real-time | Not for heavy-tailed or non-Gaussian distributions without robust variants |
+| Isolation Forest | Tree-ensemble unsupervised anomaly detector | Fraud, operations anomalies, multivariate outliers | Captures nonlinear multivariate anomalies well | Can detect odd combinations of role, latency, block-rate, and payload characteristics | Avoid for tiny datasets where model instability is high |
+| Bayesian Inference | Posterior probability updating with evidence | Risk forecasting, decision support under uncertainty | Integrates prior knowledge and new evidence rigorously | Can estimate release risk from test outcomes plus historical defects | Not needed when deterministic thresholds are sufficient |
+| Fisher's Exact Test | Exact significance test for contingency tables | Small sample proportion comparisons | Reliable p-values for low-count events | Can test whether blocked-request spikes are statistically significant | Avoid for large-sample cases where simpler approximations are fine |
 
-### Test Coverage and Combinatorial Test Design Algorithms
+</small>
 
-| Algorithm | Origin / Field | What It Does | Application to This Project | Coverage Metric | Status |
+### Test Coverage and Combinatorial
+
+<small>
+
+| Algorithm | What It Is | Most Common Use | Why It Should Be Used | How It Helps This Project | When Not To Use |
 |---|---|---|---|---|---|
-| **IPOG (In-Parameter Order General)** | Combinatorial Testing (2007) | Generates t-way covering arrays that cover all t-combinations of parameter values | Generates compact test matrices covering all 2-way and 3-way combinations of (role, action, payload type) for API tests | t-way coverage | 🟡 Applicable — combinatorial API test design |
-| **MC/DC (Modified Condition / Decision Coverage)** | Avionics Safety (DO-178B) | Requires each condition in a decision to independently affect the outcome | Applied to guardrail logic (`input_guard.py`) to ensure each injection pattern independently triggers rejection | MC/DC % | 🟡 Applicable — safety-critical coverage gate |
-| **Coverage-Guided Fuzzing (AFL-style)** | Security Testing | Measures code coverage feedback to guide random input mutation toward unexplored branches | Fuzzes translation API endpoints to discover crashes and unexpected behavior from malformed Java inputs | Branch coverage increase | 🟡 Applicable — adversarial hardening |
-| **N-version Testing / Differential Testing** | Reliability Engineering | Runs the same input against N independent implementations and flags output divergences | Runs same Java inputs through multiple Python translations and flags divergences — extends parity test concept | Divergence count | 🟡 Applicable — translation correctness validation |
+| IPOG | Covering-array generator for t-way combinations | Combinatorial API/config test design | Large coverage gains with far fewer cases than full Cartesian products | Can systematically cover role x endpoint x payload combinations with manageable test counts | Not necessary for very small parameter spaces |
+| MC/DC Coverage | Criterion requiring each condition independently affect outcome | Safety-critical software verification | Strong decision-logic assurance with efficient test sets | Can harden guardrail and RBAC condition logic validation | Avoid as universal requirement for low-risk modules due to overhead |
+| Coverage-Guided Fuzzing | Mutation fuzzing guided by code coverage feedback | Security hardening and crash discovery | Efficiently discovers deep parser/validation edge cases | Can stress translation endpoints with malformed/adversarial Java inputs | Not ideal where deterministic reproducibility and strict runtime budgets dominate |
+| N-version/Differential Testing | Compare outputs across independent implementations | Compiler/runtime verification and migration confidence | Great at finding semantic mismatches | Can compare legacy Java oracle against translated Python outputs continuously | Not useful if all compared implementations share same defect source |
 
-### Algorithm Application Priority Matrix
-
-| Priority | Algorithm | Effort | Impact | Recommended Phase |
-|---|---|---|---|---|
-| 🔴 High | **Tarjan's SCC** | Low | High — richer cycle detection + reverse topological ordering | Phase 1 — augment cycle detection |
-| 🔴 High | **Aho-Corasick** | Medium | High — O(N) multi-pattern guardrail scanning vs. O(N×P) regex | Phase 1 — guardrail performance |
-| 🔴 High | **McCabe Cyclomatic Complexity** | Low | High — objective complexity metric per translated file | Phase 1 — quality gate |
-| 🟠 High | **Shewhart / CUSUM / EWMA** | Medium | High — turns audit log into early warning system | Phase 2 — audit intelligence |
-| 🟠 High | **CFG Analysis** | Medium | High — validates control-flow equivalence post-translation | Phase 2 — parity depth |
-| 🟠 High | **Z-Score Anomaly Detection** | Low | Medium — instant outlier flagging in audit dashboard | Phase 2 — audit dashboard |
-| 🟡 Medium | **Tree Edit Distance** | High | High — proves AST-level structural parity Java→Python | Phase 3 — deep parity |
-| 🟡 Medium | **Property-Based Testing** | Medium | Medium — finds edge cases in Kahn invariants automatically | Phase 2 — test hardening |
-| 🟡 Medium | **Halstead Metrics** | Low | Medium — additional complexity view alongside McCabe | Phase 2 — metrics |
-| 🟡 Medium | **Concolic Testing** | High | High — automatically generates branch-covering test inputs | Phase 3 — test automation |
-| 🟢 Low | **Symbolic Execution** | Very High | High — formal path coverage | Phase 4 — formal verification |
-| 🟢 Low | **Model Checking** | Very High | High — formal RBAC correctness proof | Phase 4 — formal verification |
+</small>
 
 <p align="right">(<a href="#top">back to top</a>)</p>
 
